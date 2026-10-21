@@ -1,0 +1,38 @@
+[
+  {
+    "width": 1440,
+    "theme": "light",
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "light",
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "dark",
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "metricsEqual": true,
+    "pngEqual": true
+  }
+]

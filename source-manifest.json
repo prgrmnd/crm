@@ -1,0 +1,22 @@
+{
+  "index.html": {
+    "sha256": "48a8cc4a828dcfa7846fd9d0f501607200ee11cd0248fe1c7a79ea7fa4718169",
+    "bytes": 985
+  },
+  "styles.css": {
+    "sha256": "860821591575105c8e67cdfcd891a73a52430e67bc9c7152704e6ae2c30327b8",
+    "bytes": 37089
+  },
+  "app.js": {
+    "sha256": "56f446bfb093e4772e682e0c72b32e6d20dba6df1f5158a857c165bab9fe4238",
+    "bytes": 126193
+  },
+  "domain.js": {
+    "sha256": "54ce407ea39bdff68136c12945728ce774cac10f2a2a968353a8d5176dd40f78",
+    "bytes": 45554
+  },
+  "favicon.png": {
+    "sha256": "21c49945e75650cb36233d7b7eaa27aa0adbeac64b09b198fcb9c52180358ca4",
+    "bytes": 12568
+  }
+}

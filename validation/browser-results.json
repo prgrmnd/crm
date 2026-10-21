@@ -1,0 +1,17 @@
+{
+  "passed": [
+    "11 telas e login de administrador",
+    "funil, lista, arraste e layout móvel",
+    "seleção entre páginas, bloqueio opt-out, composição/revisão/ativação",
+    "cadastro, máscaras, interação, conversão, doação, recibo, PDF, envio e bloqueio de exclusão",
+    "importação CSV com duplicados e inválidos",
+    "Excel .xlsx comprimido e seleção de lista preservada ao filtrar",
+    "automação por cadastro, pós-cadastro, tarefa, perda, agenda e retomada",
+    "suspensão, recebimento com anexo e download sem reativação indevida",
+    "recorrência mensal, simulação, pausa/retomada, cancelamento, histórico e PDF de relatório",
+    "persistência de dados, sessão e tema após recarga",
+    "perfil operador e menus restritos",
+    "recuperação por hash, redefinição e login com a nova senha"
+  ],
+  "errors": []
+}

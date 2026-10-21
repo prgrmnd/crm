@@ -1,0 +1,530 @@
+[
+  {
+    "width": 1440,
+    "theme": "light",
+    "screen": "dashboard",
+    "elements": 303,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "screen": "funnel",
+    "elements": 294,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "screen": "losses",
+    "elements": 147,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "screen": "contacts",
+    "elements": 343,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "screen": "donors",
+    "elements": 300,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "screen": "lists",
+    "elements": 128,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "screen": "emails",
+    "elements": 103,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "screen": "finance",
+    "elements": 454,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "screen": "reports",
+    "elements": 267,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "screen": "users",
+    "elements": 121,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "screen": "audit",
+    "elements": 204,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "screen": "dashboard",
+    "elements": 303,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "screen": "funnel",
+    "elements": 294,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "screen": "losses",
+    "elements": 147,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "screen": "contacts",
+    "elements": 343,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "screen": "donors",
+    "elements": 300,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "screen": "lists",
+    "elements": 128,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "screen": "emails",
+    "elements": 103,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "screen": "finance",
+    "elements": 454,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "screen": "reports",
+    "elements": 267,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "screen": "users",
+    "elements": 121,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "screen": "audit",
+    "elements": 204,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "light",
+    "screen": "dashboard",
+    "elements": 303,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "light",
+    "screen": "funnel",
+    "elements": 294,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "light",
+    "screen": "losses",
+    "elements": 147,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "light",
+    "screen": "contacts",
+    "elements": 343,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "light",
+    "screen": "donors",
+    "elements": 300,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "light",
+    "screen": "lists",
+    "elements": 128,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "light",
+    "screen": "emails",
+    "elements": 103,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "light",
+    "screen": "finance",
+    "elements": 454,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "light",
+    "screen": "reports",
+    "elements": 267,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "light",
+    "screen": "users",
+    "elements": 121,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "light",
+    "screen": "audit",
+    "elements": 204,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "dark",
+    "screen": "dashboard",
+    "elements": 303,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "dark",
+    "screen": "funnel",
+    "elements": 294,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "dark",
+    "screen": "losses",
+    "elements": 147,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "dark",
+    "screen": "contacts",
+    "elements": 343,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "dark",
+    "screen": "donors",
+    "elements": 300,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "dark",
+    "screen": "lists",
+    "elements": 128,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "dark",
+    "screen": "emails",
+    "elements": 103,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "dark",
+    "screen": "finance",
+    "elements": 454,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "dark",
+    "screen": "reports",
+    "elements": 267,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "dark",
+    "screen": "users",
+    "elements": 121,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 1000,
+    "theme": "dark",
+    "screen": "audit",
+    "elements": 204,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "screen": "dashboard",
+    "elements": 303,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "screen": "funnel",
+    "elements": 294,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "screen": "losses",
+    "elements": 147,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "screen": "contacts",
+    "elements": 343,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "screen": "donors",
+    "elements": 300,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "screen": "lists",
+    "elements": 128,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "screen": "emails",
+    "elements": 103,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "screen": "finance",
+    "elements": 454,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "screen": "reports",
+    "elements": 267,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "screen": "users",
+    "elements": 121,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "screen": "audit",
+    "elements": 204,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "screen": "dashboard",
+    "elements": 303,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "screen": "funnel",
+    "elements": 294,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "screen": "losses",
+    "elements": 147,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "screen": "contacts",
+    "elements": 343,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "screen": "donors",
+    "elements": 300,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "screen": "lists",
+    "elements": 128,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "screen": "emails",
+    "elements": 103,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "screen": "finance",
+    "elements": 454,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "screen": "reports",
+    "elements": 267,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "screen": "users",
+    "elements": 121,
+    "metricsEqual": true,
+    "pngEqual": true
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "screen": "audit",
+    "elements": 204,
+    "metricsEqual": true,
+    "pngEqual": true
+  }
+]

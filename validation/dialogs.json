@@ -1,0 +1,326 @@
+[
+  {
+    "width": 1440,
+    "theme": "light",
+    "operation": "profile",
+    "metricsEqual": true,
+    "pngEqual": false,
+    "pixels": 2009,
+    "maxDelta": 1
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "operation": "contact",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "operation": "move",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "operation": "convert",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "operation": "interaction",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "operation": "response",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "operation": "donor-status",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "operation": "payment",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "operation": "adherence",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "operation": "profile",
+    "metricsEqual": true,
+    "pngEqual": false,
+    "pixels": 168,
+    "maxDelta": 1
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "operation": "contact",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "operation": "move",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "operation": "convert",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "operation": "interaction",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "operation": "response",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "operation": "donor-status",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "operation": "payment",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "operation": "adherence",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "operation": "profile",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "operation": "contact",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "operation": "move",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "operation": "convert",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "operation": "interaction",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "operation": "response",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "operation": "donor-status",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "operation": "payment",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "operation": "adherence",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "operation": "profile",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "operation": "contact",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "operation": "move",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "operation": "convert",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "operation": "interaction",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "operation": "response",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "operation": "donor-status",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "operation": "payment",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  },
+  {
+    "width": 390,
+    "theme": "dark",
+    "operation": "adherence",
+    "metricsEqual": true,
+    "pngEqual": true,
+    "pixels": 0,
+    "maxDelta": 0
+  }
+]

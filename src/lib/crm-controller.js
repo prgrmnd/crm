@@ -1,0 +1,3364 @@
+import D from "./domain.cjs";
+
+export function createCRMController(model) {
+  const { view, runtime } = model;
+  const KEY = "luz-crm-v1",
+    SESSION = "luz-crm-session-v2";
+  const $ = (s, r = view) => r.find(s),
+    $$ = (s, r = view) => r.findAll(s);
+  const THEME_KEY = "luz-crm-theme";
+  function applyTheme(theme) {
+    view.documentElement.dataset.theme = theme;
+    $('meta[name="theme-color"]').content =
+      theme === "dark" ? "#151c18" : "#5B8C3E";
+    $$("[data-action=theme]").forEach((b) => {
+      const dark = theme === "dark";
+      b.setAttribute("aria-pressed", String(dark));
+      b.setAttribute(
+        "aria-label",
+        dark ? "Ativar tema claro" : "Ativar tema escuro",
+      );
+      b.title = dark ? "Ativar tema claro" : "Ativar tema escuro";
+      b.markup = icon(dark ? "sun" : "moon");
+    });
+  }
+  function toggleTheme() {
+    const theme =
+      view.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    applyTheme(theme);
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch {
+      toast(
+        "O tema foi alterado, mas não foi possível salvar a preferência.",
+        "error",
+      );
+    }
+  }
+  function themeButton() {
+    const dark = view.documentElement.dataset.theme === "dark",
+      label = dark ? "Ativar tema claro" : "Ativar tema escuro";
+    return `<button type="button" class="icon-button theme-toggle" data-action="theme" aria-label="${label}" title="${label}" aria-pressed="${dark}">${icon(dark ? "sun" : "moon")}</button>`;
+  }
+  const esc = (x) =>
+    String(x ?? "").replace(
+      /[&<>"']/g,
+      (c) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[c],
+    );
+  const money = (n) =>
+    Number(n || 0).toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    });
+  const date = (x) =>
+    x
+      ? new Date(x.length === 10 ? x + "T12:00:00" : x).toLocaleDateString(
+          "pt-BR",
+        )
+      : "—";
+  const time = (x) =>
+    new Date(x).toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  const monthLabel = (m) =>
+    new Date(m + "-01T12:00:00").toLocaleDateString("pt-BR", {
+      month: "short",
+      year: "numeric",
+    });
+  const initials = (n) =>
+    n
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((s) => s[0])
+      .join("")
+      .toUpperCase();
+  const paths = {
+    home: "M3 10 12 3l9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z",
+    users:
+      "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M22 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75",
+    heart:
+      "M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z",
+    funnel: "M3 4h18l-7 8v7l-4 2v-9Z",
+    list: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
+    wallet:
+      "M3 5h16v4H4a2 2 0 0 1 0-4Zm0 2v12a2 2 0 0 0 2 2h16V9h-5v6h5 M17 12h.01",
+    chart: "M3 3v18h18M7 16v-4M12 16V7M17 16v-7",
+    shield: "M12 3 3 7v6c0 5 9 9 9 9s9-4 9-9V7Zm-5 9 3 3 7-7",
+    plus: "M12 5v14M5 12h14",
+    search: "M21 21l-6-6M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0",
+    arrow: "M5 12h14m-5-5 5 5-5 5",
+    close: "m6 6 12 12M6 18 18 6",
+    logout: "M9 21H4V3h5M9 12h12m-4-4 4 4-4 4",
+    mail: "M3 5h18v14H3Zm0 0 9 7 9-7",
+    check: "m5 12 4 4L19 6",
+    clock: "M12 8v4l3 2M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",
+    download: "M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5",
+    upload: "M12 16V4m-5 5 5-5 5 5M4 16v5h16v-5",
+    leaf: "M20 3C9 2 2 8 5 15s14 7 15-12ZM4 21 15 10",
+    menu: "M3 6h18M3 12h18M3 18h18",
+    edit: "m16 3 5 5-12 12-6 1 1-6ZM14 5l5 5",
+    file: "M14 2H4v20h16V8Zm0 0v6h6M8 13h8M8 17h6",
+    bell: "M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4",
+  };
+  paths.moon = "M20.9 13a9 9 0 0 1-9.9-9.9A9 9 0 1 0 20.9 13Z";
+  paths.sun =
+    "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8 M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5";
+  const icon = (n) =>
+    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[n] || paths.file}"/></svg>`;
+  const brand = () =>
+    `<div class="brand"><img class="brand-logo" src="favicon.png" alt="Logo da Luz da Esperança" width="48" height="48"><div class="brand-name">Luz da Esperança<small>Relacionar para transformar</small></div></div>`;
+  const art = () =>
+    '<div class="welcome-art" aria-hidden="true"><div class="sun"></div><div class="hill two"></div><div class="hill"></div><div class="plant"></div></div>';
+  const button = (label, action, id = "", style = "secondary", ic = "") =>
+    `<button type="button" class="btn ${style}" data-action="${action}" data-id="${esc(id)}">${ic ? icon(ic) : ""}${label}</button>`;
+  const badge = (label, tone = "") =>
+    `<span class="badge ${tone}">${esc(label)}</span>`;
+  const donorBadge = (c) =>
+    c.plan
+      ? badge(
+          c.plan.status,
+          c.plan.status === "Inadimplente"
+            ? "red"
+            : c.plan.status === "Ativo"
+              ? ""
+              : "gray",
+        )
+      : badge("Potencial doador", "gold");
+  const statusBadge = (c) =>
+    donorBadge(c) +
+    (D.enrolled(state, c) ? " " + badge("Sócio Inscrito", "gold") : "") +
+    (D.outsideCadence(c) ? " " + badge("Fora da cadência", "red") : "");
+  const avatar = (c) => `<span class="avatar">${esc(initials(c.name))}</span>`;
+  const contactCell = (c) =>
+    `<div class="contact-cell">${avatar(c)}<div><button class="contact-name" data-action="profile" data-id="${c.id}">${esc(c.name)}</button><small>${esc(c.email || c.phone)}</small>${D.enrolled(state, c) ? '<small class="enrolled-alert">Nenhuma doação financeira registrada</small>' : ""}</div></div>`;
+  const empty = (msg) => `<div class="empty">${icon("leaf")}${esc(msg)}</div>`;
+  const select = (name, options, value = "", placeholder = "Todos") =>
+    `<select name="${name}" aria-label="${esc(name)}">${placeholder ? `<option value="">${placeholder}</option>` : ""}${options
+      .map((o) => {
+        const [v, t] = Array.isArray(o) ? o : [o, o];
+        return `<option value="${esc(v)}" ${String(v) === String(value) ? "selected" : ""}>${esc(t)}</option>`;
+      })
+      .join("")}</select>`;
+  const $f = (s) => $(s, $("#modal"));
+  const field = (label, name, value = "", type = "text", extra = "") =>
+    `<div class="field"><label for="f-${name}">${label}</label><input id="f-${name}" name="${name}" type="${type}" value="${esc(value)}" ${extra}></div>`;
+  const selectField = (label, name, options, value = "", placeholder = "") =>
+    `<div class="field"><label for="f-${name}">${label}</label>${select(name, options, value, placeholder).replace("<select ", '<select id="f-' + name + '" ')}</div>`;
+  let emailTab = "messages";
+  let selectedContacts = new Set(),
+    funnelView = "board",
+    funnelMobileStage = 0;
+  let state,
+    user,
+    page = "dashboard",
+    filters = {
+      q: "",
+      origin: "",
+      owner: "",
+      period: "",
+      funnel: "",
+      status: "",
+      mode: "",
+      stage: "",
+    },
+    tab = "all",
+    financeTab = "payments",
+    contactPage = 1,
+    lastActivity = Date.now(),
+    loginAttempts = 0,
+    lockUntil = 0;
+  function save() {
+    D.processAutomations(state);
+    D.processMailings(state);
+    try {
+      localStorage.setItem(KEY, JSON.stringify(state));
+    } catch {
+      toast(
+        "Não foi possível salvar neste navegador. As alterações atuais ficam em memória.",
+        "error",
+      );
+    }
+  }
+  function toast(msg, tone = "") {
+    const node = view.createElement("div");
+    node.className = "toast " + (tone ? "error-toast" : "");
+    node.textContent = msg;
+    $("#toasts").replaceChildren(node);
+    runtime.timeout(() => node.remove(), 4800);
+  }
+  async function hashPassword(password, salt) {
+    if (!crypto.subtle)
+      throw Error("Abra em http://localhost:3000 para usar a autenticação.");
+    const key = await crypto.subtle.importKey(
+        "raw",
+        new TextEncoder().encode(password),
+        "PBKDF2",
+        false,
+        ["deriveBits"],
+      ),
+      bits = await crypto.subtle.deriveBits(
+        {
+          name: "PBKDF2",
+          salt: new TextEncoder().encode(salt),
+          iterations: 100000,
+          hash: "SHA-256",
+        },
+        key,
+        256,
+      );
+    return [...new Uint8Array(bits)]
+      .map((x) => x.toString(16).padStart(2, "0"))
+      .join("");
+  }
+  async function credentials(password) {
+    const salt = D.uid();
+    return { salt, passwordHash: await hashPassword(password, salt) };
+  }
+  function admin() {
+    if (user?.role !== "Administrador")
+      throw Error("Esta ação exige perfil de Administrador.");
+  }
+  function activeUser() {
+    if (!user || !state.users.some((u) => u.id === user.id && u.active))
+      throw Error("Sua sessão foi encerrada. Entre novamente.");
+    if (Date.now() - lastActivity > 30 * 60 * 1000) {
+      logout();
+      throw Error("Sessão encerrada por inatividade.");
+    }
+    lastActivity = Date.now();
+    sessionStorage.setItem(
+      SESSION,
+      JSON.stringify({ id: user.id, last: lastActivity }),
+    );
+  }
+  function logout(message) {
+    selectedContacts.clear();
+    sessionStorage.removeItem(SESSION);
+    user = null;
+    closeModal();
+    render();
+    if (message) toast(message);
+  }
+  function navigate(next) {
+    if (next === "automations") next = "emails";
+    if (["dashboard", "reports", "users", "audit"].includes(next)) admin();
+    if (page !== next) selectedContacts.clear();
+    page = next;
+    filters = {
+      q: "",
+      origin: "",
+      owner: "",
+      period: "",
+      funnel: "",
+      status: "",
+      mode: "",
+      stage: "",
+    };
+    tab = next === "donors" ? "donors" : "all";
+    financeTab = "payments";
+    contactPage = 1;
+    render();
+    window.scrollTo(0, 0);
+  }
+  function heading(title, description, actions = "") {
+    return `<div class="page-heading"><div><div class="eyebrow">Luz da Esperança · Captação e relacionamento</div><h1>${title}</h1><p>${description}</p></div><div class="flex">${actions}</div></div>`;
+  }
+  const pageNames = {
+    dashboard: "Visão geral",
+    funnel: "Funil de captação",
+    losses: "Funil de perdas",
+    contacts: "Contatos",
+    donors: "Doadores",
+    lists: "Listas e campanhas",
+    emails: "E-mails",
+    finance: "Doações e pendências",
+    reports: "Relatórios",
+    users: "Usuários e acessos",
+    audit: "Histórico de auditoria",
+  };
+  function render() {
+    if (!user) {
+      renderLogin();
+      return;
+    }
+    if (
+      user.role !== "Administrador" &&
+      ["dashboard", "reports", "users", "audit"].includes(page)
+    )
+      page = "funnel";
+    const nav = (p, ic, count) =>
+      `<button class="nav-item ${page === p ? "active" : ""}" data-action="nav" data-id="${p}" ${page === p ? 'aria-current="page"' : ""}>${icon(ic)}${pageNames[p]}${count ? `<span class="nav-count">${count}</span>` : ""}</button>`;
+    $("#app").markup =
+      `<aside class="sidebar">${brand()}<div class="nav-label">Nosso dia a dia</div>${user.role === "Administrador" ? nav("dashboard", "home") : ""}${nav("funnel", "funnel")}${nav("losses", "funnel")}${nav("contacts", "users")}${nav("donors", "heart")}${nav("lists", "mail")}${nav("emails", "mail")}<div class="nav-label">Contribuições</div>${nav("finance", "wallet", D.pending(state).filter((p) => p.overdue).length)}${user.role === "Administrador" ? nav("reports", "chart") + '<div class="nav-label">Administração</div>' + nav("users", "shield") + nav("audit", "clock") : ""}<div class="sidebar-note">${icon("leaf")}<p>Cada relacionamento cultivado faz a esperança florescer.</p></div><div class="sidebar-foot">Parnaíba, PI · Centro Espírita e Obras Sociais</div></aside><div class="workspace"><header class="topbar"><button class="icon-button mobile-menu" data-action="menu" aria-label="Abrir ou fechar menu">${icon("menu")}</button><span class="breadcrumb">Nosso espaço &nbsp; / &nbsp; <b>${pageNames[page]}</b></span><div class="topbar-right">${themeButton()}<button class="icon-button" data-action="tasks" aria-label="Ver ações de relacionamento">${icon("bell")}</button><div class="flex">${avatar(user)}<div class="user-text">${esc(user.name)}<small>${esc(user.role)}</small></div></div><button class="icon-button" data-action="logout" aria-label="Sair do sistema" title="Sair do sistema">${icon("logout")}</button></div></header><main id="main">${content()}${pageFooter()}</main></div>`;
+    bindPage();
+  }
+  function pageFooter() {
+    return `<footer class="page-footer"><span>Feito para cuidar de quem caminha com a nossa causa.</span><span>Luz da Esperança · ${new Date().getFullYear()}</span></footer>`;
+  }
+  function content() {
+    switch (page) {
+      case "dashboard":
+        return dashboard();
+      case "funnel":
+        return funnel();
+      case "losses":
+        return lossesFunnel();
+      case "contacts":
+      case "donors":
+        return contacts();
+      case "lists":
+        return lists();
+      case "emails":
+        return emailsPage();
+      case "finance":
+        return finance();
+      case "reports":
+        return reports();
+      case "users":
+        return users();
+      case "audit":
+        return auditPage();
+    }
+  }
+  function metric(title, value, sub, ic = "heart", gold = false) {
+    return `<div class="metric"><div class="metric-head">${title}<span class="metric-icon ${gold ? "gold" : ""}">${icon(ic)}</span></div><strong>${value}</strong><small>${sub}</small></div>`;
+  }
+  function paymentsFor(period = D.month()) {
+    return state.payments.filter((p) => p.date.startsWith(period));
+  }
+  function total(ps) {
+    return ps.reduce((s, p) => s + p.amount, 0);
+  }
+  function chart(end = D.month()) {
+    const d = new Date(end + "-01T12:00:00"),
+      data = [];
+    for (let offset = -5; offset <= 0; offset++) {
+      const m = D.month(
+          new Date(d.getFullYear(), d.getMonth() + offset, 1, 12),
+        ),
+        ps = paymentsFor(m);
+      data.push({
+        m,
+        rec: total(ps.filter((p) => p.mode === "Recorrente")),
+        one: total(ps.filter((p) => p.mode === "Pontual")),
+      });
+    }
+    const max = Math.max(500, ...data.flatMap((v) => [v.rec, v.one]));
+    return `<div class="chart"><div class="axis"><span>${money(max)}</span><span>${money(max / 2)}</span><span>R$ 0</span></div><div class="bars">${data.map((v) => `<div class="bar-group"><div class="bar" style="height:${(v.rec / max) * 82}%" title="${monthLabel(v.m)} · Recorrentes: ${money(v.rec)}" role="img" aria-label="${monthLabel(v.m)}: recorrentes ${money(v.rec)}"></div><div class="bar gold" style="height:${(v.one / max) * 82}%" title="Pontuais: ${money(v.one)}" role="img" aria-label="Pontuais ${money(v.one)}"></div><span class="bar-label">${new Date(v.m + "-01T12:00:00").toLocaleDateString("pt-BR", { month: "short" }).replace(".", "")}</span></div>`).join("")}</div></div>`;
+  }
+  function funnelSummary() {
+    return D.STAGES.map((name, i) => {
+      const count = state.contacts.filter(
+        (c) => c.stage === i && !c.plan && !D.outsideCadence(c),
+      ).length;
+      return `<div class="funnel-row"><span class="step">${i + 1}</span><div class="info">${name}<div class="progress ${i === 1 ? "gold" : ""}"><i style="width:${Math.max(8, (count / Math.max(1, state.contacts.filter((c) => !c.plan && !D.outsideCadence(c)).length)) * 100)}%"></i></div></div><strong>${count}</strong></div>`;
+    }).join("");
+  }
+  function dashboard() {
+    const ps = paymentsFor(),
+      donors = state.contacts.filter((c) => c.plan),
+      pending = D.pending(state).filter((p) => p.overdue),
+      active = donors.filter((c) => c.plan.status === "Ativo"),
+      rec = active
+        .filter((c) => c.plan.mode === "Recorrente")
+        .reduce((s, c) => s + c.plan.amount, 0);
+    return (
+      heading(
+        "Bom dia, " + esc(user.name.split(" ")[0]) + ".",
+        "Um olhar sobre os relacionamentos que tornam nossa missão possível.",
+        button("Registrar doação", "payment", "", "", "plus"),
+      ) +
+      `<section class="welcome"><div><div class="eyebrow">Pequenos gestos. Novas possibilidades.</div><h2>Juntos, a esperança ganha força.</h2><p>Acompanhe cada contribuição e cultive os laços de quem ajuda a transformar a vida da nossa comunidade.</p></div>${art()}</section><div class="flex between" style="margin-bottom:15px"><h3>Nosso impacto em números</h3><small>${new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</small></div><section class="metrics">${metric("Arrecadado neste mês", money(total(ps)), ps.length + " contribuições recebidas", "wallet")}${metric("Doadores ativos", active.length, donors.length + " doadores cadastrados", "heart")}${metric("Receita mensal prevista", money(rec), "Compromissos recorrentes ativos", "leaf")}${metric("Pendências em atraso", money(total(pending)), pending.length + " competências aguardando baixa", "clock", true)}</section><div class="dashboard-grid"><section class="panel"><div class="panel-header"><div><h2>Uma história de generosidade</h2><p>Contribuições recebidas nos últimos seis meses</p></div><div class="legend"><span><i></i>Recorrentes</span><span><i class="gold"></i>Pontuais</span></div></div><div class="panel-body">${chart()}<div class="chart-footer"><span>Cada contribuição tem um destino.</span><strong>${money(total(ps))} neste mês</strong></div></div></section><section class="panel"><div class="panel-header"><div><h2>Caminhos até a doação</h2><p>Potenciais doadores em cada etapa</p></div></div><div class="panel-body">${funnelSummary()}${button("Ver funil completo", "nav", "funnel", "quiet", "arrow")}</div></section><section class="panel"><div class="panel-header"><div><h2>Contribuições mais recentes</h2><p>Gestos que fazem a diferença</p></div>${button("Ver todas", "nav", "finance", "quiet", "arrow")}</div>${paymentTable([...state.payments].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4), true)}</section><section class="panel"><div class="panel-header"><div><h2>Hora de cultivar os laços</h2><p>Relacionamentos que precisam de atenção</p></div>${icon("leaf")}</div><div class="panel-body">${
+        state.tasks
+          .filter((t) => !t.done)
+          .slice(0, 3)
+          .map(
+            (t) =>
+              `<div class="list-row"><span class="avatar">${icon("heart")}</span><div><p>${esc(t.text)}</p><small>Reengajamento · doador recorrente</small></div><button class="icon-button right" data-action="profile" data-id="${t.contactId}" aria-label="Abrir contato">${icon("arrow")}</button></div>`,
+          )
+          .join("") || empty("Todos os relacionamentos estão em dia.")
+      }<div class="list-row"><span class="avatar">${icon("users")}</span><div><p>${state.contacts.filter((c) => !c.plan && !D.outsideCadence(c) && c.stage === 3).length} contatos prontos para doar</p><small>Na etapa de decisão de doação</small></div><button class="icon-button right" data-action="nav" data-id="funnel" aria-label="Ver funil">${icon("arrow")}</button></div></div></section></div>`
+    );
+  }
+  function filterContacts() {
+    const q = filters.q.toLocaleLowerCase("pt-BR");
+    return state.contacts.filter(
+      (c) =>
+        (!q ||
+          [c.name, c.email, c.phone, c.document].some((v) =>
+            v.toLocaleLowerCase("pt-BR").includes(q),
+          )) &&
+        (!filters.origin || c.origin === filters.origin) &&
+        (!filters.owner || c.owner === filters.owner) &&
+        (!filters.period ||
+          D.month(page === "losses" ? c.cadenceExit?.date || "" : c.created) ===
+            filters.period) &&
+        (!filters.funnel || c.funnel === filters.funnel) &&
+        (!filters.status ||
+          (filters.status === "Sócio Inscrito"
+            ? D.enrolled(state, c)
+            : (c.plan?.status || "Potencial doador") === filters.status)) &&
+        (!filters.stage || String(c.stage) === filters.stage),
+    );
+  }
+  function filtersHTML(extra = "", period = false) {
+    return `<div class="filters"><div class="search">${icon("search")}<input type="search" id="search" aria-label="Buscar por nome, e-mail, telefone ou documento" placeholder="Buscar um relacionamento…" value="${esc(filters.q)}"></div>${select("origin", D.ORIGINS, filters.origin, "Todas as origens")}${select(
+      "owner",
+      state.users.map((u) => [u.id, u.name]),
+      filters.owner,
+      "Todos os operadores",
+    )}${period ? `<input type="month" name="period" value="${esc(filters.period)}" aria-label="Mês de cadastro">` : ""}${extra}${Object.values(filters).some(Boolean) ? button("Limpar filtros", "clear", "", "quiet") : ""}</div>`;
+  }
+  function funnel() {
+    const cs = filterContacts().filter(
+      (c) => (!c.plan || c.cadenceEpisodes?.length) && !D.outsideCadence(c),
+    );
+    const stageNames = [
+      "Descoberta",
+      "Reconhecimento",
+      "Consideração",
+      "Decisão de doação",
+    ];
+    const controls = `<div class="funnel-toolbar"><small>${cs.length} relacionamentos na cadência</small><div class="tabs view-tabs" aria-label="Visualização do funil">${[
+      ["board", "Quadro compacto", "funnel"],
+      ["list", "Lista", "list"],
+    ]
+      .map(
+        ([v, label, ic]) =>
+          `<button class="tab ${funnelView === v ? "active" : ""}" data-action="funnel-view" data-id="${v}" aria-pressed="${funnelView === v}">${icon(ic)} ${label}</button>`,
+      )
+      .join("")}</div></div>`;
+    const board = `<div class="mobile-stages" aria-label="Etapa do funil">${stageNames.map((name, i) => `<button class="stage-tab ${funnelMobileStage === i ? "active" : ""}" data-action="funnel-stage" data-id="${i}" aria-pressed="${funnelMobileStage === i}">${esc(name)} <span>${cs.filter((c) => c.stage === i).length}</span></button>`).join("")}</div><div class="kanban compact-kanban">${D.STAGES.map(
+      (name, i) =>
+        `<section class="column ${funnelMobileStage === i ? "is-selected" : ""}" data-stage="${i}" aria-label="${esc(name)}"><div class="column-heading"><span class="stage-number">${i + 1}</span><h3 title="${esc(name)}">${stageNames[i]}</h3><span class="stage-count">${cs.filter((c) => c.stage === i).length}</span></div><div class="column-cards" tabindex="0" role="region" aria-label="Contatos em ${esc(name)}">${
+          cs
+            .filter((c) => c.stage === i)
+            .map(
+              (c) =>
+                `<article class="card compact-card" draggable="true" data-contact="${c.id}" data-action="profile" data-id="${c.id}"><div class="compact-contact">${avatar(c)}<div class="compact-card-info"><button class="contact-name" data-action="profile" data-id="${c.id}" title="${esc(c.name)}">${esc(c.name)}</button><small>${esc(c.origin)} · ${c.funnel}</small></div><button class="icon-button card-move" data-action="move" data-id="${c.id}" aria-label="Mover etapa de ${esc(c.name)}" title="Mover etapa">${icon("arrow")}</button></div></article>`,
+            )
+            .join("") ||
+          '<div class="empty compact-empty">Nenhum contato nesta etapa.</div>'
+        }</div></section>`,
+    ).join(
+      "",
+    )}</div><p class="board-help">${icon("funnel")} Arraste para mover entre etapas ou use a seta de cada contato.</p>`;
+    const list = `<section class="panel funnel-list">${cs.length ? `<div class="table-wrap"><table><thead><tr><th>Relacionamento</th><th>Etapa atual</th><th>Origem</th><th>Responsável</th><th></th></tr></thead><tbody>${cs.map((c) => `<tr><td>${contactCell(c)}</td><td><span class="stage-inline">${c.stage + 1}</span>${esc(stageNames[c.stage])}</td><td>${esc(c.origin)} · ${c.funnel}</td><td>${esc(state.users.find((u) => u.id === c.owner)?.name || "—")}</td><td>${button("Mover etapa", "move", c.id, "secondary small", "arrow")}</td></tr>`).join("")}</tbody></table></div>` : empty("Nenhum contato encontrado para estes filtros.")}</section>`;
+    return (
+      heading(
+        "Funil de captação",
+        "Cultive os relacionamentos, um passo de cada vez.",
+        button("Novo contato", "contact", "", "", "plus"),
+      ) +
+      filtersHTML(
+        select(
+          "funnel",
+          ["Inbound", "Outbound"],
+          filters.funnel,
+          "Todos os funis",
+        ),
+        true,
+      ) +
+      controls +
+      (funnelView === "board" ? board : list)
+    );
+  }
+  function lossesFunnel() {
+    const cs = filterContacts().filter(
+      (c) =>
+        D.outsideCadence(c) &&
+        (!filters.lossReason || c.cadenceExit.reason === filters.lossReason),
+    );
+    const filtersBar = filtersHTML(
+      select(
+        "funnel",
+        ["Inbound", "Outbound"],
+        filters.funnel,
+        "Inbound e Outbound",
+      ) +
+        select(
+          "lossReason",
+          D.LOSS_REASONS,
+          filters.lossReason,
+          "Todos os motivos",
+        ) +
+        `<label class="filter-label">Mês da saída <input type="month" name="period" value="${esc(filters.period)}" aria-label="Mês da saída"></label>`,
+    );
+    return (
+      heading(
+        "Funil de perdas",
+        "Relacionamentos fora da cadência, em acompanhamento de recuperação. O status financeiro dos doadores é preservado.",
+      ) +
+      filtersBar +
+      `<div class="funnel-toolbar"><small>${cs.length} relacionamentos fora da cadência · incluindo doadores</small></div><div class="kanban compact-kanban losses-kanban">${D.LOSS_STAGES.map(
+        (name, i) =>
+          `<section class="column is-selected" aria-label="Perdas em ${esc(name)}"><div class="column-heading"><span class="stage-number">${i + 1}</span><h3>${esc(name)}</h3><span class="stage-count">${cs.filter((c) => D.lossStage(c) === i).length}</span></div><div class="column-cards" tabindex="0" role="region" aria-label="Perdas em ${esc(name)}">${
+            cs
+              .filter((c) => D.lossStage(c) === i)
+              .map(
+                (c) =>
+                  `<button type="button" class="card compact-card loss-card" data-action="profile" data-id="${c.id}" aria-label="Ver detalhes de ${esc(c.name)}"><span class="compact-contact">${avatar(c)}<span class="compact-card-info"><span class="contact-name">${esc(c.name)}</span><small>${esc(c.origin)} · ${esc(c.funnel)}</small></span><span class="card-move" aria-hidden="true">${icon("arrow")}</span></span></button>`,
+              )
+              .join("") ||
+            '<div class="empty compact-empty">Nenhuma perda nesta etapa.</div>'
+          }</div></section>`,
+      ).join("")}</div>`
+    );
+  }
+  function exitCadenceForm(id) {
+    const c = state.contacts.find((c) => c.id === id);
+    if (!c || D.outsideCadence(c))
+      throw Error("Contato inválido ou já fora da cadência.");
+    formModal(
+      "Registrar perda",
+      `<p class="notice">${esc(c.name)} sairá da cadência principal. Seu cadastro e histórico serão preservados${c.plan ? ", sem alteração do status financeiro" : ""}.</p>${selectField("Motivo da perda *", "reason", D.LOSS_REASONS)}${field("Data da saída *", "date", D.today(), "date", `required min="${esc(c.created.slice(0, 10))}" max="${D.today()}"`)}<div class="field"><label for="f-note">Observação (obrigatória em Outros)</label><textarea id="f-note" name="note" maxlength="2000"></textarea></div>`,
+      (d) => {
+        D.exitCadence(state, user, id, d);
+        save();
+        closeModal();
+        render();
+        profile(id);
+        toast("Perda registrada. Relacionamento fora da cadência.");
+      },
+      "Confirmar saída",
+    );
+    $f("[name=reason]").onchange = () => {
+      $f("[name=note]").required = $f("[name=reason]").value === "Outros";
+    };
+  }
+  const automationStatus = {
+    scheduled: "Agendada",
+    processing: "Processada",
+    simulated: "Envio simulado",
+    blocked: "Bloqueada",
+    failed: "Falha",
+    cancelled: "Cancelada",
+  };
+  function automationTiming(r) {
+    return r.delayMinutes ? `Após ${r.delayMinutes} minuto(s)` : "Imediato";
+  }
+  function automationConditions(r) {
+    return [
+      r.origin || "Todas as origens",
+      r.direction || "Inbound e Outbound",
+      r.event === "stage"
+        ? r.stage === ""
+          ? "Todas as etapas"
+          : D.STAGES[r.stage]
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+  const mailingStatus = {
+    draft: "Aguardando revisão",
+    active: "Ativo",
+    paused: "Pausado",
+    completed: "Concluído",
+    cancelled: "Cancelado",
+  };
+  const mailingFrequency = {
+    daily: "Diária",
+    weekly: "Semanal",
+    monthly: "Mensal",
+  };
+  const emailWeekdays = [
+    "Domingo",
+    "Segunda-feira",
+    "Terça-feira",
+    "Quarta-feira",
+    "Quinta-feira",
+    "Sexta-feira",
+    "Sábado",
+  ];
+  const emailMonthWeeks = {
+    1: "Primeira",
+    2: "Segunda",
+    3: "Terceira",
+    4: "Quarta",
+    "-1": "Última",
+  };
+  function emailTiming(m) {
+    return m.kind === "once"
+      ? "Envio único"
+      : `Recorrente · ${mailingFrequency[m.frequency]}${m.weekday != null && ["weekly", "monthly"].includes(m.frequency) ? " · " + (m.frequency === "monthly" ? emailMonthWeeks[m.monthWeek ?? 1] + " " : "") + emailWeekdays[m.weekday] : ""}`;
+  }
+  function emailsPage() {
+    D.ensureMailings(state);
+    D.ensureAutomations(state);
+    D.ensureExtensions(state);
+    const tabs = [
+      ["messages", "Envios e recorrências"],
+      ["automations", "Automações"],
+      ["history", "Histórico"],
+    ];
+    return (
+      heading(
+        "E-mails",
+        "Escreva para a sua rede, programe recorrências e acompanhe as automações.",
+        button("Novo e-mail", "email-new", "", "", "plus"),
+      ) +
+      `<div class="tabs email-tabs" aria-label="Áreas de e-mail">${tabs.map(([id, label]) => `<button class="tab ${emailTab === id ? "active" : ""}" data-action="email-tab" data-id="${id}" aria-pressed="${emailTab === id}">${label}</button>`).join("")}</div><p class="notice email-simulation">Os envios são simulados. Agendamentos executam enquanto o sistema está aberto ou ao reabrir. Períodos perdidos de recorrência não geram disparos acumulados.</p>${emailTab === "automations" ? emailAutomationsSection() : emailTab === "history" ? emailHistoryHTML() : emailMessagesHTML()}`
+    );
+  }
+  function emailMessagesHTML() {
+    const items = state.mailings.filter(
+      (m) =>
+        (!filters.q ||
+          (m.subject + " " + m.body)
+            .toLocaleLowerCase("pt-BR")
+            .includes(filters.q.toLocaleLowerCase("pt-BR"))) &&
+        (!filters.status || m.status === filters.status),
+    );
+    return `<div class="filters"><div class="search">${icon("search")}<input id="search" type="search" aria-label="Buscar e-mails" placeholder="Buscar assunto ou mensagem…" value="${esc(filters.q)}"></div>${select("status", Object.entries(mailingStatus), filters.status, "Todas as situações")}</div><section class="panel">${items.length ? `<div class="table-wrap"><table><thead><tr><th>Mensagem</th><th>Destinatários</th><th>Próximo envio</th><th>Situação</th><th>Ações</th></tr></thead><tbody>${items.map((m) => `<tr><td><strong>${esc(m.subject)}</strong><small class="automation-meta">${esc(emailTiming(m))}${m.endDate ? " · Até " + date(m.endDate) : ""}</small></td><td>${m.contacts.length} selecionados</td><td>${m.nextAt ? time(m.nextAt) : "—"}</td><td>${badge(mailingStatus[m.status], m.status === "active" ? "" : m.status === "draft" ? "gold" : "gray")}</td><td><div class="email-row-actions">${button("Detalhes", "email-detail", m.id, "quiet small")}${button("Editar", "email-edit", m.id, "quiet small")}${m.status === "draft" || m.status === "paused" ? button(m.status === "paused" ? "Revisar e retomar" : "Revisar e ativar", "email-review", m.id, "secondary small") : ""}${m.status === "active" ? button("Pausar", "email-pause", m.id, "secondary small") : ""}${!["completed", "cancelled"].includes(m.status) ? button("Cancelar", "email-cancel", m.id, "quiet small") : ""}</div></td></tr>`).join("")}</tbody></table></div>` : empty("Crie um e-mail, escolha os destinatários e defina envio único ou recorrente.")}</section>`;
+  }
+  function emailComposeForm(draft = {}, id = "") {
+    cleanContactSelection();
+    const d = {
+      subject: "",
+      body: "",
+      kind: "once",
+      frequency: "weekly",
+      delivery: "immediate",
+      ...draft,
+    };
+    formModal(
+      id ? "Editar e-mail" : "Novo e-mail",
+      `<div class="step-label">1 de 2 · Mensagem e destinatários</div><div class="email-compose-grid"><div class="email-message">${field("Assunto *", "subject", d.subject, "text", 'required maxlength="180"')}${selectField(
+        "Tipo de envio",
+        "kind",
+        [
+          ["once", "Único"],
+          ["recurring", "Recorrente"],
+        ],
+        d.kind,
+      )}<div id="email-recurrence-fields">${selectField("Frequência de envio", "frequency", Object.entries(mailingFrequency), d.frequency || "weekly")}<div id="email-month-week-field">${selectField("Ocorrência no mês", "monthWeek", Object.entries(emailMonthWeeks), d.monthWeek ?? 1)}</div><div id="email-weekday-field">${selectField(
+        "Dia da semana",
+        "weekday",
+        emailWeekdays.map((name, i) => [i, name]),
+        d.weekday ?? new Date(d.startAt || d.anchorAt || Date.now()).getDay(),
+      )}</div>${field("Encerrar em (opcional)", "endDate", d.endDate || "", "date", `min="${D.today()}"`)}<small>Diária: todos os dias. Semanal: a cada semana. Mensal: na ocorrência e dia da semana escolhidos, uma vez por mês.</small></div><div class="field"><label for="f-body">Mensagem *</label><textarea id="f-body" name="body" rows="10" required maxlength="10000">${esc(d.body)}</textarea></div><p class="recipient-help">Envios únicos podem ser imediatos ou agendados. Recorrências permitem frequência diária, semanal ou mensal.</p></div><section class="email-recipients" aria-label="Selecionar destinatários"><h3>Quem vai receber?</h3><div class="search recipient-search">${icon("search")}<input id="email-recipient-search" type="search" placeholder="Buscar nome ou e-mail…" aria-label="Buscar destinatários"></div><div class="email-recipient-filters">${selectField(
+        "Vínculo",
+        "recipientLink",
+        [
+          ["leads", "Potenciais doadores"],
+          ["donors", "Doadores"],
+        ],
+        "",
+        "Todos os contatos",
+      )}${selectField(
+        "Lista de contatos",
+        "recipientList",
+        state.lists.map((l) => [l.id, l.name]),
+        "",
+        "Todas as listas",
+      )}${selectField("Origem", "recipientOrigin", D.ORIGINS, "", "Todas as origens")}</div><div class="recipient-select-all"><label><input id="email-select-all" type="checkbox" data-action="email-select-all"> Selecionar todos do filtro</label><small id="email-filter-count"></small></div><div id="email-recipient-list" class="check-list recipient-list"></div><div class="recipient-summary"><span id="email-selected-count" aria-live="polite"></span>${button("Limpar", "email-clear", "", "quiet small")}</div><p class="recipient-help">Descadastrados e contatos sem e-mail válido ficam indisponíveis. Alterar filtros preserva a seleção.</p></section></div>`,
+      (data) => {
+        cleanContactSelection();
+        if (!selectedContacts.size)
+          throw Error("Selecione pelo menos um destinatário.");
+        emailScheduleForm(
+          { ...d, ...data, contacts: [...selectedContacts] },
+          id,
+        );
+      },
+      "Continuar",
+      true,
+    );
+    const toggleRecurrence = () => {
+      const recurring = $f("[name=kind]").value === "recurring";
+      $f("#email-recurrence-fields").hidden = !recurring;
+      $f("[name=frequency]").disabled = !recurring;
+      $f("[name=endDate]").disabled = !recurring;
+      const frequency = $f("[name=frequency]").value,
+        withDay = recurring && ["weekly", "monthly"].includes(frequency),
+        monthly = recurring && frequency === "monthly";
+      $f("#email-weekday-field").hidden = !withDay;
+      $f("[name=weekday]").disabled = !withDay;
+      $f("#email-month-week-field").hidden = !monthly;
+      $f("[name=monthWeek]").disabled = !monthly;
+    };
+    $f("[name=kind]").onchange = toggleRecurrence;
+    $f("[name=frequency]").onchange = toggleRecurrence;
+    toggleRecurrence();
+    $f("#email-recipient-search").on("input", updateEmailRecipients);
+    $$(".email-recipient-filters select", $("#modal")).forEach(
+      (el) => (el.onchange = updateEmailRecipients),
+    );
+    updateEmailRecipients();
+  }
+  function localDateTime(iso) {
+    const d = new Date(iso);
+    return (
+      D.month(d) +
+      "-" +
+      String(d.getDate()).padStart(2, "0") +
+      "T" +
+      String(d.getHours()).padStart(2, "0") +
+      ":" +
+      String(d.getMinutes()).padStart(2, "0")
+    );
+  }
+  function emailScheduleForm(d, id) {
+    const future = d.startAt && Date.parse(d.startAt) > Date.now();
+    formModal(
+      "Quando enviar?",
+      `<div class="step-label">2 de 2 · Agendamento</div><p class="notice green">${esc(d.subject)} · ${d.contacts.length} destinatários · ${d.kind === "recurring" ? "Recorrente" : "Único"}</p>${selectField(
+        d.kind === "recurring" ? "Primeiro envio" : "Enviar",
+        "delivery",
+        [
+          ["immediate", "Após revisar e confirmar"],
+          ["scheduled", "Na data e hora escolhidas"],
+        ],
+        future ? "scheduled" : d.delivery || "immediate",
+      )}${field("Data e hora do envio", "startAt", future ? localDateTime(d.startAt) : localDateTime(new Date(Date.now() + 3600000).toISOString()), "datetime-local", `min="${localDateTime(new Date().toISOString())}"`)}${d.kind === "recurring" ? `<p class="notice">Frequência: <b>${esc(mailingFrequency[d.frequency || "weekly"])}${d.weekday != null && ["weekly", "monthly"].includes(d.frequency) ? " · " + (d.frequency === "monthly" ? esc(emailMonthWeeks[d.monthWeek ?? 1]) + " " : "") + esc(emailWeekdays[d.weekday]) : ""}</b></p><p class="recipient-help">A recorrência usa o horário local deste navegador. Na frequência semanal, o primeiro envio será no dia escolhido, a partir da confirmação ou da data agendada, mantendo o horário. Na frequência mensal, escolha a ocorrência do dia da semana, como primeira segunda-feira ou última sexta-feira. Sem data de término, os envios continuam até pausar ou cancelar.</p>` : ""}${button("Voltar à mensagem", "email-compose-back-local", "", "quiet")}`,
+      (data) => {
+        const scheduled = data.delivery === "scheduled";
+        if (
+          scheduled &&
+          (!data.startAt ||
+            !Number.isFinite(Date.parse(data.startAt)) ||
+            Date.parse(data.startAt) <= Date.now())
+        )
+          throw Error("Escolha uma data e hora futuras.");
+        const m = D.saveMailing(
+          state,
+          user,
+          {
+            ...d,
+            ...data,
+            startAt: scheduled ? new Date(data.startAt).toISOString() : "",
+          },
+          id,
+        );
+        save();
+        emailReview(m.id);
+      },
+      "Salvar e revisar",
+    );
+    const toggle = () => {
+      const input = $f("[name=startAt]"),
+        scheduled = $f("[name=delivery]").value === "scheduled";
+      input.closest(".field").hidden = !scheduled;
+      input.disabled = !scheduled;
+      input.required = scheduled;
+    };
+    $f("[name=delivery]").onchange = toggle;
+    toggle();
+    $f("[data-action=email-compose-back-local]").onclick = (e) => {
+      e.stopPropagation();
+      const values = Object.fromEntries(runtime.formEntries($("#modal-form")));
+      emailComposeForm(
+        {
+          ...d,
+          ...values,
+          startAt:
+            values.delivery === "scheduled" && values.startAt
+              ? new Date(values.startAt).toISOString()
+              : "",
+        },
+        id,
+      );
+    };
+  }
+  function emailReview(id) {
+    const m = state.mailings.find((m) => m.id === id);
+    if (!m) throw Error("E-mail não encontrado.");
+    const first = D.firstMailingAt(m);
+    const targets = m.contacts.map((id) => {
+        const c = state.contacts.find((c) => c.id === id);
+        return { c, block: D.mailingBlock(c, m) };
+      }),
+      blocked = targets.filter((t) => t.block).length;
+    modal(
+      "Revisar e-mail",
+      `<p class="notice green">${esc(emailTiming(m))} · ${m.contacts.length - blocked} elegíveis · ${blocked} bloqueados</p><h3>${esc(m.subject)}</h3><div class="campaign-preview">${esc(m.body)}</div><p class="email-review-timing">${m.status === "paused" && m.activated && m.kind === "recurring" ? "Ao retomar, o próximo horário futuro da programação original será usado." : first.getTime() > Date.now() ? "Primeiro envio: " + date(first.toISOString()) + " às " + first.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "Primeiro envio após confirmar."}${m.endDate ? " Término: " + date(m.endDate) + "." : ""}</p><div class="review-recipient-list">${targets.map(({ c, block }) => `<div class="review-recipient"><b>${esc(c?.name || "Contato removido")}</b><small>${esc(c?.email || "Sem e-mail")} ${block ? " · " + esc(block) : ""}</small></div>`).join("")}</div><p class="notice">Envio simulado. A elegibilidade de cada destinatário é conferida em cada execução. ${m.kind === "recurring" ? "Contatos fora da cadência ou doadores suspensos não recebem recorrências." : ""}</p>`,
+      button("Fechar", "close") +
+        button("Editar", "email-edit", id, "secondary") +
+        button(
+          m.status === "paused" ? "Confirmar retomada" : "Confirmar e ativar",
+          "email-activate-local",
+          "",
+          "",
+          "check",
+        ),
+      true,
+    );
+    $f("[data-action=email-activate-local]").onclick = (e) => {
+      e.stopPropagation();
+      const b = e.currentTarget;
+      b.disabled = true;
+      try {
+        activeUser();
+        D.setMailingStatus(state, user, id, "active");
+        save();
+        selectedContacts.clear();
+        closeModal();
+        emailTab = "messages";
+        if (page !== "emails") navigate("emails");
+        else render();
+        toast("E-mail ativado. Os envios do sistema são simulados.");
+      } catch (err) {
+        b.disabled = false;
+        toast(err.message, "error");
+      }
+    };
+  }
+  function emailCancel(id) {
+    const m = state.mailings.find((m) => m.id === id);
+    modal(
+      "Cancelar os próximos envios?",
+      `<p>${esc(m.subject)}</p><p>O histórico será preservado. Para programar novamente, será necessário editar e revisar uma nova versão.</p>`,
+      button("Voltar", "close") +
+        button("Confirmar cancelamento", "email-cancel-local"),
+    );
+    $f("[data-action=email-cancel-local]").onclick = (e) => {
+      e.stopPropagation();
+      try {
+        activeUser();
+        D.setMailingStatus(state, user, id, "cancelled");
+        save();
+        closeModal();
+        render();
+      } catch (err) {
+        toast(err.message, "error");
+      }
+    };
+  }
+  function emailMailingDetail(id) {
+    const m = state.mailings.find((m) => m.id === id),
+      runs = state.mailingRuns.filter((r) => r.mailingId === id);
+    modal(
+      "Detalhes do e-mail",
+      `<h3>${esc(m.subject)}</h3><p>${badge(mailingStatus[m.status])} ${esc(emailTiming(m))}</p><div class="campaign-preview">${esc(m.body)}</div><p>Versão ${m.version} · Configurado por ${esc(m.updatedByName)} · ${m.contacts.length} destinatários selecionados.</p><p>Próximo envio: ${m.nextAt ? date(m.nextAt) + " · " + time(m.nextAt) : "—"}${m.endDate ? " · Término " + date(m.endDate) : ""}</p><h3>Execuções</h3>${runs.map((r) => `<div class="list-row"><div><p>${time(r.at)} · ${badge(automationStatus[r.status])}</p><small>Versão ${r.version} · ${r.results.filter((x) => x.status === "simulated").length} simulados · ${r.results.filter((x) => x.status === "blocked").length} bloqueados</small></div>${button("Ver execução", "email-run", r.id, "quiet small")}</div>`).join("") || empty("Ainda não houve execução.")}`,
+      button("Fechar", "close") +
+        (m.status === "active"
+          ? button(
+              "Simular próximo envio agora",
+              "email-simulate",
+              id,
+              "secondary",
+              "mail",
+            )
+          : ""),
+      true,
+    );
+  }
+  function emailRunDetail(id) {
+    const r = state.mailingRuns.find((r) => r.id === id);
+    if (!r) throw Error("Execução não encontrada.");
+    modal(
+      "Execução de e-mail",
+      `<h3>${esc(r.subject)}</h3><p>${badge(automationStatus[r.status])} · ${time(r.at)} · Sistema</p><small>Versão ${r.version} · Configurado por ${esc(r.configuredBy)} · Previsto para ${date(r.dueAt)} ${time(r.dueAt)}</small><div class="campaign-preview">${esc(r.body)}</div>${r.skipped ? `<p class="notice">${r.skipped} períodos anteriores foram ignorados para evitar envios acumulados.</p>` : ""}<div class="review-recipient-list">${r.results.map((x) => `<div class="review-recipient"><b>${esc(x.name)}</b><small>${esc(x.recipient)} · ${esc(automationStatus[x.status])}</small><small>${esc(x.detail)}</small></div>`).join("")}</div>`,
+      button("Fechar", "close"),
+      true,
+    );
+  }
+  function emailHistoryHTML() {
+    const entries = [
+      ...state.mailingRuns.map((r) => ({
+        subject: r.subject,
+        at: r.at,
+        type: r.kind === "once" ? "Único" : "Recorrente",
+        status: r.status,
+        detail:
+          r.results.filter((x) => x.status === "simulated").length +
+          " simulados · " +
+          r.results.filter((x) => x.status === "blocked").length +
+          " bloqueados",
+        action: "email-run",
+        id: r.id,
+      })),
+      ...state.automationRuns.map((r) => ({
+        subject: r.rule.name,
+        at: r.updatedAt || r.scheduledAt,
+        type: "Automação",
+        status: r.status,
+        detail: r.contactName + " · " + (r.recipient || "Sem e-mail"),
+        action: "automation-run",
+        id: r.id,
+      })),
+      ...state.receiptSends.map((r) => ({
+        subject: r.subject,
+        at: r.at,
+        type: "Recibo",
+        status: r.status,
+        detail: r.recipient,
+        action: "receipt",
+        id: r.paymentId,
+      })),
+      ...state.campaigns
+        .filter((c) => !c.mailingRunId && !c.automationRunId)
+        .map((c) => ({
+          subject: c.subject,
+          at: c.at,
+          type: "Envio manual anterior",
+          status: "simulated",
+          detail: c.contacts.length + " destinatários",
+          action: "campaign-detail",
+          id: c.id,
+        })),
+    ]
+      .filter(
+        (r) =>
+          (!filters.q ||
+            (r.subject + " " + r.detail)
+              .toLocaleLowerCase("pt-BR")
+              .includes(filters.q.toLocaleLowerCase("pt-BR"))) &&
+          (!filters.status || r.status === filters.status),
+      )
+      .sort((a, b) => b.at.localeCompare(a.at));
+    return `<div class="filters"><div class="search">${icon("search")}<input id="search" type="search" aria-label="Buscar histórico de e-mails" placeholder="Buscar mensagem ou destinatário…" value="${esc(filters.q)}"></div>${select("status", Object.entries(automationStatus), filters.status, "Todos os resultados")}</div><section class="panel">${entries.length ? `<div class="table-wrap"><table><thead><tr><th>Mensagem / regra</th><th>Tipo</th><th>Data</th><th>Resultado</th><th></th></tr></thead><tbody>${entries.map((r) => `<tr><td>${esc(r.subject)}<small class="automation-meta">${esc(r.detail)}</small></td><td>${r.type}</td><td>${time(r.at)}</td><td>${badge(automationStatus[r.status], r.status === "blocked" || r.status === "failed" ? "red" : "")}</td><td>${button("Detalhes", r.action, r.id, "quiet small")}</td></tr>`).join("")}</tbody></table></div>` : empty("Nenhum registro de e-mail encontrado.")}</section>`;
+  }
+  function emailAutomationsSection() {
+    D.ensureAutomations(state);
+    const rules = state.automations,
+      runs = state.automationRuns.filter(
+        (r) =>
+          (!filters.status || r.status === filters.status) &&
+          (!filters.q ||
+            [r.contactName, r.recipient, r.rule.name].some((v) =>
+              String(v || "")
+                .toLocaleLowerCase("pt-BR")
+                .includes(filters.q.toLocaleLowerCase("pt-BR")),
+            )),
+      );
+    return `<div class="email-section-heading"><div><h2>Mensagens por evento</h2><p>Cadastro, entrada em etapa e contribuição registrada.</p></div>${button("Nova automação", "automation-new", "", "secondary", "plus")}</div><p class="notice">Envios simulados. Regras novas ficam pausadas até a revisão. Agendamentos são processados enquanto o sistema está aberto ou ao reabrir.</p>${intakeRulesHTML()}<div class="lists-grid automation-rules">${rules.map((r) => `<article class="panel automation-rule"><div class="flex between"><h2>${esc(r.name)}</h2>${badge(r.active ? "Ativa" : "Pausada", r.active ? "" : "gray")}</div><p>${esc(D.AUTO_EVENTS[r.event])}</p><small>${esc(automationConditions(r))}<br>${automationTiming(r)}</small><p class="automation-subject">${esc(r.subject)}</p><small>Configurada por ${esc(r.updatedByName)} · ${time(r.updatedAt)}</small><footer class="flex">${button("Editar", "automation-edit", r.id, "secondary small", "edit")}${r.active ? button("Pausar", "automation-pause", r.id, "quiet small") : button("Revisar e ativar", "automation-review", r.id, "small")}</footer></article>`).join("")}</div><section class="panel automation-history"><div class="panel-header"><div><h2>Histórico de execuções</h2><p>Disparos, destinatários e resultados</p></div></div><div class="automation-filters">${filtersHTML(select("status", Object.entries(automationStatus), filters.status, "Todos os resultados"))}</div>${runs.length ? `<div class="table-wrap"><table><thead><tr><th>Regra / evento</th><th>Contato</th><th>Previsão</th><th>Resultado</th><th></th></tr></thead><tbody>${runs.map((r) => `<tr><td>${esc(r.rule.name)}<small class="automation-meta">${esc(D.AUTO_EVENTS[r.event.type])}</small></td><td>${esc(r.contactName)}<small class="automation-meta">${esc(r.recipient || "Sem e-mail")}</small></td><td>${time(r.dueAt)}</td><td>${badge(automationStatus[r.status], r.status === "failed" || r.status === "blocked" ? "red" : r.status === "simulated" ? "" : "gray")}</td><td>${button("Ver detalhes", "automation-run", r.id, "quiet small")}</td></tr>`).join("")}</tbody></table></div>` : empty("Nenhuma execução encontrada. Ative uma regra e registre um novo evento.")}</section>`;
+  }
+  function automationForm(id = "", draft = null) {
+    D.ensureAutomations(state);
+    const rule = draft ||
+      state.automations.find((r) => r.id === id) || {
+        name: "",
+        event: "registered",
+        origin: "",
+        direction: "Inbound",
+        stage: "",
+        delayMinutes: 0,
+        subject: "",
+        body: "",
+      };
+    formModal(
+      id ? "Editar automação" : "Nova automação",
+      `<div class="step-label">1 de 2 · Disparo e condições</div>${field("Nome *", "name", rule.name, "text", 'required maxlength="120"')}${selectField("Disparar quando", "event", Object.entries(D.AUTO_EVENTS), rule.event)}${selectField("Origem", "origin", D.ORIGINS, rule.origin, "Todas as origens")}${selectField("Classificação", "direction", ["Inbound", "Outbound"], rule.direction, "Inbound e Outbound")}${selectField(
+        "Etapa",
+        "stage",
+        D.STAGES.map((name, i) => [i, name]),
+        rule.stage,
+        "Todas as etapas",
+      )}`,
+      (d) => {
+        automationMessageForm(id, {
+          ...rule,
+          ...d,
+          direction:
+            d.event === "registered" || ["Site", "Instagram"].includes(d.origin)
+              ? "Inbound"
+              : d.direction || "",
+          stage:
+            d.event === "stage" ? (d.stage === "" ? "" : Number(d.stage)) : "",
+        });
+      },
+      "Continuar",
+    );
+    const update = () => {
+      const event = $f("[name=event]").value,
+        stage = $f("[name=stage]"),
+        direction = $f("[name=direction]");
+      stage.disabled = event !== "stage";
+      stage.closest(".field").hidden = event !== "stage";
+      direction.disabled =
+        event === "registered" ||
+        ["Site", "Instagram"].includes($f("[name=origin]").value);
+      if (direction.disabled) direction.value = "Inbound";
+    };
+    $f("[name=event]").onchange = update;
+    $f("[name=origin]").onchange = update;
+    update();
+  }
+  function automationMessageForm(id, rule) {
+    const unit =
+      rule.delayMinutes && rule.delayMinutes % 1440 === 0
+        ? 1440
+        : rule.delayMinutes && rule.delayMinutes % 60 === 0
+          ? 60
+          : 1;
+    formModal(
+      "Mensagem da automação",
+      `<div class="step-label">2 de 2 · Mensagem e prazo</div>${field("Assunto *", "subject", rule.subject, "text", 'required maxlength="180"')}<div class="field"><label for="f-body">Mensagem *</label><textarea id="f-body" name="body" required maxlength="10000" rows="6">${esc(rule.body)}</textarea><small>Variáveis: {{nome}}, {{origem}}, {{etapa}}${rule.event === "payment" ? ", {{valor}}, {{recibo}}" : ""}</small></div><div class="form-grid">${field("Enviar após (0 = imediato)", "delay", rule.delayMinutes / unit, "number", 'required min="0" max="525600" step="1"')}${selectField(
+        "Unidade",
+        "unit",
+        [
+          [1, "Minutos"],
+          [60, "Horas"],
+          [1440, "Dias"],
+        ],
+        unit,
+      )}</div>${button("Voltar", "automation-back", "", "quiet")}`,
+      (d) => {
+        const saved = D.saveAutomation(
+          state,
+          user,
+          {
+            ...rule,
+            subject: d.subject,
+            body: d.body,
+            delayMinutes: Number(d.delay) * Number(d.unit),
+          },
+          id,
+        );
+        save();
+        closeModal();
+        render();
+        automationReview(saved.id);
+      },
+      "Salvar e revisar",
+    );
+    $f("[data-action=automation-back]").onclick = (e) => {
+      e.stopPropagation();
+      automationForm(id, {
+        ...rule,
+        subject: $f("[name=subject]").value,
+        body: $f("[name=body]").value,
+        delayMinutes:
+          Number($f("[name=delay]").value) * Number($f("[name=unit]").value),
+      });
+    };
+  }
+  function automationReview(id) {
+    const r = state.automations.find((r) => r.id === id);
+    if (!r) throw Error("Automação não encontrada.");
+    const previewContact = state.contacts.find((c) =>
+      (!r.origin || c.origin === r.origin) &&
+      (r.stage === "" || c.stage === r.stage),
+    );
+    const payment = previewContact && state.payments.find((p) => p.contactId === previewContact.id);
+    const preview = previewContact
+      ? D.renderAutomationMessage(state, r, {stage: previewContact.stage, paymentId: payment?.id}, previewContact)
+      : {subject: r.subject, body: r.body};
+    modal(
+      "Revisar automação",
+      `<h3>${esc(r.name)}</h3><p class="notice green">${esc(D.AUTO_EVENTS[r.event])}<br>${esc(automationConditions(r))}<br>${automationTiming(r)}</p><small>Prévia da mensagem</small><h3 class="automation-subject">${esc(preview.subject)}</h3><div class="campaign-preview">${esc(preview.body)}</div><p class="automation-meta">A ativação vale para novos eventos. Cadastros e contribuições anteriores não disparam mensagens retroativas.</p>`,
+      button("Voltar", "close") +
+        button("Ativar automação", "automation-activate", id, "", "check"),
+    );
+    $f("[data-action=automation-activate]").onclick = (e) => {
+      e.stopPropagation();
+      try {
+        activeUser();
+        D.setAutomationActive(state, user, id, true);
+        save();
+        closeModal();
+        render();
+        toast("Automação ativada para novos eventos.");
+      } catch (err) {
+        toast(err.message, "error");
+      }
+    };
+  }
+  function automationRunDetail(id) {
+    const r = state.automationRuns.find((r) => r.id === id);
+    if (!r) throw Error("Execução não encontrada.");
+    modal(
+      "Execução de automação",
+      `<h3>${esc(r.rule.name)}</h3><p class="automation-subject">${badge(automationStatus[r.status], r.status === "failed" || r.status === "blocked" ? "red" : "")}</p><dl class="details"><div><dt>Contato</dt><dd>${esc(r.contactName)}</dd></div><div><dt>Destinatário</dt><dd>${esc(r.recipient || "Sem e-mail")}</dd></div><div><dt>Evento</dt><dd>${esc(D.AUTO_EVENTS[r.event.type])} · ${time(r.event.at)}</dd></div><div><dt>Previsão</dt><dd>${time(r.dueAt)}</dd></div><div><dt>Configuração</dt><dd>${esc(r.rule.updatedByName)} · versão ${r.rule.version}</dd></div><div><dt>Execução</dt><dd>Sistema · ${r.attempts.length} tentativa(s)</dd></div></dl><p class="notice">${esc(r.detail)}</p><h3>${esc(r.subject || r.rule.subject)}</h3><div class="campaign-preview">${esc(r.body || r.rule.body)}</div><h3 class="automation-subject">Histórico</h3><div class="timeline">${r.transitions.map((t) => `<article class="event"><h3>${esc(automationStatus[t.status])}</h3><p>${esc(t.detail)}</p><small>${time(t.at)} · Sistema</small></article>`).join("")}</div>`,
+      button("Fechar", "close") +
+        (state.contacts.some((c) => c.id === r.contactId)
+          ? button("Abrir ficha", "profile", r.contactId, "secondary")
+          : "") +
+        (r.status === "scheduled"
+          ? button("Cancelar envio", "automation-cancel", id, "secondary") +
+            button("Simular agora", "automation-now", id, "", "mail")
+          : r.status === "failed"
+            ? button("Tentar novamente", "automation-retry", id, "", "mail")
+            : ""),
+      true,
+    );
+  }
+  function bindOriginDirection() {
+    const origin = $f("[name=origin]"),
+      direction = $f("[name=funnel]");
+    const update = () => {
+      const inboundOnly = ["Site", "Instagram"].includes(origin.value),
+        value = inboundOnly ? "Inbound" : direction.value;
+      direction.markup = ["Inbound", "Outbound"]
+        .map((v) => `<option value="${v}">${v}</option>`)
+        .join("");
+      direction.value = value;
+      direction.disabled = inboundOnly;
+    };
+    origin.onchange = update;
+    update();
+  }
+  function moveLossForm(id) {
+    const c = state.contacts.find((c) => c.id === id);
+    if (!D.outsideCadence(c))
+      throw Error("Contato não está no funil de perdas.");
+    formModal(
+      "Mover etapa de perdas",
+      `<p class="notice green">${esc(c.name)} · ${esc(c.cadenceExit.reason)}</p>${selectField(
+        "Etapa de perdas",
+        "lossStage",
+        D.LOSS_STAGES.map((name, i) => [i, name]),
+        D.lossStage(c),
+      )}${field("Data da retomada *", "followUpDate", c.cadenceExit.followUpDate || D.today(), "date", `min="${D.today()}"`)}<div class="field"><label for="f-note">Observação da movimentação</label><textarea id="f-note" name="note" maxlength="2000"></textarea></div>`,
+      (d) => {
+        D.moveLoss(
+          state,
+          user,
+          id,
+          Number(d.lossStage),
+          d.note,
+          d.followUpDate,
+        );
+        save();
+        closeModal();
+        render();
+        profile(id);
+        toast("Etapa de perdas atualizada.");
+      },
+      "Salvar etapa",
+    );
+    const update = () => {
+      const input = $f("[name=followUpDate]"),
+        scheduled = $f("[name=lossStage]").value === "2";
+      input.closest(".field").hidden = !scheduled;
+      input.required = scheduled;
+      input.disabled = !scheduled;
+    };
+    $f("[name=lossStage]").onchange = update;
+    update();
+  }
+  function resumeCadenceForm(id) {
+    const c = state.contacts.find((c) => c.id === id);
+    if (!D.outsideCadence(c)) throw Error("Contato não está fora da cadência.");
+    formModal(
+      "Retomar cadência",
+      `<p class="notice green">${esc(c.name)} · ${esc(c.cadenceExit.reason)}. A retomada preserva o histórico e o status financeiro.</p>${selectField(
+        "Etapa de retorno",
+        "stage",
+        D.STAGES.map((name, i) => [i, name]),
+        c.cadenceExit.stage,
+      )}<div class="field"><label for="f-reason">Motivo da retomada *</label><textarea id="f-reason" name="reason" required maxlength="2000"></textarea></div>`,
+      (d) => {
+        D.resumeCadence(state, user, id, Number(d.stage), d.reason);
+        save();
+        closeModal();
+        render();
+        profile(id);
+        toast("Relacionamento retornou à cadência.");
+      },
+      "Retomar cadência",
+    );
+  }
+  function visibleContacts() {
+    return filterContacts().filter((c) =>
+      page === "donors"
+        ? c.plan
+        : tab === "leads"
+          ? !c.plan
+          : tab === "donors"
+            ? c.plan
+            : true,
+    );
+  }
+  function emailEligible(c) {
+    return Boolean(c?.email && D.emailValid(c.email) && !c.optOut);
+  }
+  function cleanContactSelection() {
+    selectedContacts = new Set(
+      [...selectedContacts].filter((id) =>
+        emailEligible(state.contacts.find((c) => c.id === id)),
+      ),
+    );
+  }
+  function selectionToolbar(cs) {
+    cleanContactSelection();
+    const eligible = cs.filter(emailEligible),
+      allSelected =
+        eligible.length > 0 &&
+        eligible.every((c) => selectedContacts.has(c.id));
+    return `<div class="contact-selection-bar"><label class="select-filtered"><input type="checkbox" data-action="select-filtered" ${allSelected ? "checked" : ""} ${eligible.length ? "" : "disabled"} aria-label="Selecionar todos os contatos elegíveis deste filtro"> Selecionar todos do filtro <small>(${eligible.length})</small></label><span class="selection-count" aria-live="polite">${selectedContacts.size} ${selectedContacts.size === 1 ? "selecionado" : "selecionados"}</span><div class="selection-actions">${selectedContacts.size ? button("Limpar seleção", "clear-selection", "", "quiet small") : ""}${button("Redigir e-mail", "bulk-email", "", "small", "mail")}</div></div>`;
+  }
+  function contacts() {
+    const isDonors = page === "donors",
+      cs = visibleContacts(),
+      pages = Math.max(1, Math.ceil(cs.length / 10));
+    contactPage = Math.min(contactPage, pages);
+    return (
+      heading(
+        isDonors
+          ? "Quem caminha com a nossa causa"
+          : "Cada contato, uma nova possibilidade",
+        isDonors
+          ? "Acompanhe contribuições e cuide de quem sustenta nossas obras sociais."
+          : "Pessoas e organizações que fazem parte da nossa rede de esperança.",
+        button("Exportar", "export-contacts", "", "secondary", "download") +
+          button("Novo contato", "contact", "", "", "plus"),
+      ) +
+      (!isDonors
+        ? `<div class="tabs">${[
+            ["all", "Todos os contatos"],
+            ["leads", "Potenciais doadores"],
+            ["donors", "Doadores"],
+          ]
+            .map(
+              ([v, l]) =>
+                `<button class="tab ${tab === v ? "active" : ""}" data-action="contact-tab" data-id="${v}">${l}</button>`,
+            )
+            .join("")}</div>`
+        : "") +
+      filtersHTML(
+        select(
+          "status",
+          isDonors
+            ? [...D.DONOR_STATUSES, "Sócio Inscrito"]
+            : ["Potencial doador", ...D.DONOR_STATUSES, "Sócio Inscrito"],
+          filters.status,
+          "Todos os status",
+        ),
+      ) +
+      `<section class="panel contacts-panel">${selectionToolbar(cs)}${
+        cs.length
+          ? `<div class="table-wrap"><table><thead><tr><th class="checkbox-cell"><span class="sr-only">Selecionar destinatário</span></th><th>Relacionamento</th><th>Origem</th><th>${isDonors ? "Compromisso / recebido" : "Etapa / compromisso"}</th><th>Status</th><th>Responsável</th><th></th></tr></thead><tbody>${cs
+              .slice((contactPage - 1) * 10, contactPage * 10)
+              .map(
+                (c) =>
+                  `<tr class="${selectedContacts.has(c.id) ? "selected-row" : ""}"><td class="checkbox-cell"><input type="checkbox" data-action="select-contact" data-id="${c.id}" aria-label="Selecionar ${esc(c.name)} para enviar e-mail" ${selectedContacts.has(c.id) ? "checked" : ""} ${emailEligible(c) ? "" : `disabled title="${c.optOut ? "Contato descadastrado de e-mails" : "Sem e-mail válido"}"`}></td><td>${contactCell(c)}</td><td>${esc(c.origin)}<small style="display:block">${c.funnel}</small></td><td>${c.plan ? "Compromisso: " + money(c.plan.amount) + '<small style="display:block">' + c.plan.mode + " · Recebido: " + money(total(state.payments.filter((p) => p.contactId === c.id))) + "</small>" : esc(D.STAGES[c.stage])}</td><td>${statusBadge(c)} ${c.optOut ? badge("Descadastrado", "gray") : ""}</td><td>${esc(state.users.find((u) => u.id === c.owner)?.name || "—")}</td><td><button class="icon-button" data-action="profile" data-id="${c.id}" aria-label="Abrir ficha de ${esc(c.name)}">${icon("arrow")}</button></td></tr>`,
+              )
+              .join(
+                "",
+              )}</tbody></table></div><div class="flex between" style="padding:16px 22px;border-top:1px solid var(--line)"><small>${cs.length} relacionamentos · Página ${contactPage} de ${pages}</small><div class="flex"><button class="btn secondary small" data-action="prev" ${contactPage <= 1 ? "disabled" : ""}>Anterior</button><button class="btn secondary small" data-action="next" ${contactPage >= pages ? "disabled" : ""}>Próxima</button></div></div>`
+          : empty("Nenhum relacionamento encontrado para estes filtros.")
+      }</section>`
+    );
+  }
+  function lists() {
+    const ls = state.lists.filter(
+      (l) =>
+        !filters.q ||
+        (l.name + " " + l.category)
+          .toLowerCase()
+          .includes(filters.q.toLowerCase()),
+    );
+    return (
+      heading(
+        "Cultive novas conexões",
+        "Organize a prospecção ativa e acompanhe as respostas da comunidade.",
+        button("Nova campanha", "campaign", "", "secondary", "mail") +
+          button("Nova lista", "list", "", "", "plus"),
+      ) +
+      `<div class="filters"><div class="search">${icon("search")}<input id="search" type="search" aria-label="Buscar listas" placeholder="Buscar uma lista…" value="${esc(filters.q)}"></div><span class="toolbar-end muted" style="font-size:11px">${state.lists.length} listas · ${state.campaigns.length} campanhas realizadas</span></div><div class="lists-grid">${ls.map((l) => `<article class="panel list-card"><div class="flex between"><span class="list-icon">${icon("users")}</span>${badge(l.category, "gold")}</div><h2>${esc(l.name)}</h2><p>${esc(l.description)}</p><footer><small>${l.contacts.length} contatos · ${l.contacts.filter((id) => !state.contacts.find((c) => c.id === id)?.optOut).length} elegíveis</small>${button("Abrir lista", "list-detail", l.id, "quiet", "arrow")}</footer></article>`).join("") || empty("Nenhuma lista encontrada.")}</div><section class="panel" style="margin-top:26px"><div class="panel-header"><div><h2>Campanhas de relacionamento</h2><p>Mensagens e destinatários registrados na linha do tempo</p></div>${icon("mail")}</div>${state.campaigns.length ? `<div class="table-wrap"><table><thead><tr><th>Assunto</th><th>Destinatários</th><th>Data</th><th></th></tr></thead><tbody>${state.campaigns.map((c) => `<tr><td>${esc(c.subject)}</td><td>${c.contacts.length} contatos</td><td>${time(c.at)}</td><td>${button("Ver mensagem", "campaign-detail", c.id, "quiet")}</td></tr>`).join("")}</tbody></table></div>` : empty("Sua próxima mensagem pode iniciar uma bonita história. Crie uma campanha para começar.")}</section>`
+    );
+  }
+  function paymentTable(ps, compact = false) {
+    return ps.length
+      ? `<div class="table-wrap"><table><thead><tr><th>Doador</th><th>Valor</th><th>${compact ? "Modalidade" : "Data / competência"}</th>${compact ? "" : "<th>Destinação</th>"}<th></th></tr></thead><tbody>${ps
+          .map((p) => {
+            const c = state.contacts.find((c) => c.id === p.contactId);
+            return `<tr><td>${contactCell(c)}</td><td style="color:var(--dark);font-weight:600">${money(p.amount)}</td><td>${compact ? badge(p.mode, p.mode === "Pontual" ? "gold" : "") : date(p.date) + `<small style="display:block">${monthLabel(p.period)} · ${p.mode}</small>`}</td>${compact ? "" : `<td>${esc(p.destination)}</td>`}<td><button class="icon-button" data-action="receipt" data-id="${p.id}" title="Ver recibo" aria-label="Ver recibo ${p.receipt}">${icon("file")}</button></td></tr>`;
+          })
+          .join("")}</tbody></table></div>`
+      : empty("Nenhuma contribuição encontrada neste período.");
+  }
+  function finance() {
+    const ps = state.payments
+        .filter(
+          (p) =>
+            (!filters.period || p.date.startsWith(filters.period)) &&
+            (!filters.mode || p.mode === filters.mode) &&
+            (!filters.q ||
+              state.contacts
+                .find((c) => c.id === p.contactId)
+                ?.name.toLowerCase()
+                .includes(filters.q.toLowerCase())),
+        )
+        .sort((a, b) => b.date.localeCompare(a.date)),
+      pending = D.pending(state).filter(
+        (p) =>
+          (!filters.period || p.period === filters.period) &&
+          (!filters.q ||
+            p.name.toLowerCase().includes(filters.q.toLowerCase())) &&
+          (!filters.status || p.overdue),
+      );
+    return (
+      heading(
+        "Contribuições que transformam",
+        "Recebimentos via Pix, baixas mensais e cuidado com cada contribuição.",
+        button("Exportar", "export-finance", "", "secondary", "download") +
+          button("Registrar doação", "payment", "", "", "plus"),
+      ) +
+      `<section class="metrics">${metric("Recebido neste mês", money(total(paymentsFor())), "Doações financeiras confirmadas", "wallet")}${metric("Recorrentes neste mês", money(total(paymentsFor().filter((p) => p.mode === "Recorrente"))), "Compromissos que viram cuidado", "heart")}${metric("Pontuais neste mês", money(total(paymentsFor().filter((p) => p.mode === "Pontual"))), "Gestos de generosidade", "leaf")}${metric("Saldo pendente", money(total(D.pending(state))), D.pending(state).length + " competências abertas", "clock", true)}</section><div class="tabs"><button class="tab ${financeTab === "payments" ? "active" : ""}" data-action="finance-tab" data-id="payments">Recebimentos</button><button class="tab ${financeTab === "pending" ? "active" : ""}" data-action="finance-tab" data-id="pending">Pendências mensais ${badge(D.pending(state).length, "gold")}</button></div><div class="filters"><div class="search">${icon("search")}<input id="search" type="search" placeholder="Buscar um doador…" aria-label="Buscar doador" value="${esc(filters.q)}"></div><input type="month" name="period" value="${esc(filters.period)}" aria-label="Mês de recebimento ou competência">${financeTab === "payments" ? select("mode", ["Recorrente", "Pontual"], filters.mode, "Todas as modalidades") : select("status", [["overdue", "Somente em atraso"]], filters.status, "Todas as pendências")}${Object.values(filters).some(Boolean) ? button("Limpar filtros", "clear", "", "quiet") : ""}</div><section class="panel">${financeTab === "payments" ? paymentTable(ps) : pending.length ? `<div class="table-wrap"><table><thead><tr><th>Doador</th><th>Competência</th><th>Vencimento</th><th>Saldo a receber</th><th>Situação</th><th></th></tr></thead><tbody>${pending.map((p) => `<tr><td>${contactCell(state.contacts.find((c) => c.id === p.contactId))}</td><td>${monthLabel(p.period)}</td><td>${date(p.due)}</td><td>${money(p.amount)}</td><td>${badge(p.overdue ? "Em atraso" : "A vencer", p.overdue ? "red" : "gold")}</td><td>${button("Dar baixa", "payment-pending", p.contactId + "|" + p.period, "secondary small", "check")}</td></tr>`).join("")}</tbody></table></div>` : empty("Nenhuma pendência encontrada. Obrigado por cultivar esses laços.")}</section>`
+    );
+  }
+  function reports() {
+    const { period, payments: ps, contacts: cs } = D.reportData(state, filters);
+    return (
+      heading(
+        "O cuidado também se mede",
+        "Indicadores calculados a partir das contribuições e dos relacionamentos.",
+        button("Exportar CSV", "export-report", "", "secondary", "download") +
+          button("Exportar PDF", "report-pdf", "", "secondary", "file"),
+      ) +
+      `<div class="filters"><span class="filter-label">Período de análise</span><input type="month" name="period" value="${period}" aria-label="Período de análise">${select("mode", ["Recorrente", "Pontual"], filters.mode, "Todas as modalidades")}${select(
+        "stage",
+        D.STAGES.map((s, i) => [i, s]),
+        filters.stage,
+        "Todas as etapas",
+      )}</div><section class="metrics">${metric("Total arrecadado", money(total(ps)), ps.length + " lançamentos no período", "wallet")}${metric("Doações recorrentes", money(total(ps.filter((p) => p.mode === "Recorrente"))), ps.filter((p) => p.mode === "Recorrente").length + " contribuições", "heart")}${metric("Doações pontuais", money(total(ps.filter((p) => p.mode === "Pontual"))), ps.filter((p) => p.mode === "Pontual").length + " contribuições", "leaf")}${metric("Conversão em doadores", ((cs.filter((c) => c.plan && c.plan.since <= period).length / Math.max(1, cs.length)) * 100).toFixed(1) + "%", cs.filter((c) => c.plan && c.plan.since <= period).length + " doadores / " + cs.length + " contatos", "chart", true)}</section><div class="report-grid"><section class="panel"><div class="panel-header"><div><h2>Recursos que chegam à comunidade</h2><p>Distribuição das doações por destinação</p></div></div><div class="panel-body">${D.DESTINATIONS.map(
+        (dest) => {
+          const sum = total(ps.filter((p) => p.destination === dest));
+          return `<div class="funnel-row"><div class="info">${dest}<div class="progress"><i style="width:${(sum / Math.max(1, total(ps))) * 100}%"></i></div></div><strong style="font-size:13px">${money(sum)}</strong></div>`;
+        },
+      ).join(
+        "",
+      )}</div></section><section class="panel"><div class="panel-header"><div><h2>Avanço dos contatos cadastrados no período</h2><p>Etapas atuais e histórico disponível; não representa conversão histórica fechada. Modalidade filtra somente recebimentos.</p></div></div><div class="panel-body">${D.STAGES.map(
+        (stage, i) => {
+          const reached = cs.filter(
+              (c) =>
+                c.stage >= i ||
+                c.history.some(
+                  (h) =>
+                    h.action === "Etapa alterada" &&
+                    h.details.startsWith(stage) &&
+                    D.month(h.at) <= period,
+                ),
+            ),
+            converted = reached.filter((c) =>
+              i === 3
+                ? c.plan && c.plan.since <= period
+                : c.stage > i ||
+                  (c.plan && c.plan.since <= period) ||
+                  c.history.some(
+                    (h) =>
+                      h.action === "Etapa alterada" &&
+                      D.month(h.at) <= period &&
+                      D.STAGES.slice(i + 1).some((t) =>
+                        h.details.startsWith(t),
+                      ),
+                  ),
+            );
+          return `<div class="funnel-row"><div class="info">${esc(stage)}<small style="display:block;margin-top:5px">${converted.length} de ${reached.length} contatos${i === 3 ? " tornaram-se doadores" : " avançaram"}</small></div><strong>${((converted.length / Math.max(1, reached.length)) * 100).toFixed(0)}%</strong></div>`;
+        },
+      ).join(
+        "",
+      )}</div></section></div><section class="panel" style="margin-top:22px"><div class="panel-header"><div><h2>Contribuições do período</h2><p>Valores vinculados aos lançamentos financeiros</p></div><span class="badge">${monthLabel(period)}</span></div>${paymentTable(ps)}</section>`
+    );
+  }
+  function users() {
+    return (
+      heading(
+        "Pessoas que cuidam da nossa missão",
+        "Administre o acesso da equipe e os papéis de cada operador.",
+        button("Novo usuário", "user", "", "", "plus"),
+      ) +
+      `<section class="panel"><div class="table-wrap"><table><thead><tr><th>Nome e e-mail</th><th>Perfil de acesso</th><th>Status</th><th></th></tr></thead><tbody>${state.users.map((u) => `<tr><td><div class="contact-cell">${avatar(u)}<div>${esc(u.name)}<small>${esc(u.email)}</small></div></div></td><td>${badge(u.role, u.role === "Administrador" ? "gold" : "")}</td><td>${badge(u.active ? "Ativo" : "Inativo", u.active ? "" : "gray")}</td><td>${button("Editar", "user", u.id, "quiet", "edit")}</td></tr>`).join("")}</tbody></table></div></section><div class="notice green" style="margin-top:22px">Administradores têm acesso completo. Operadores de captação cuidam dos contatos, das listas, dos relacionamentos e dos lançamentos de doações.</div>`
+    );
+  }
+  function auditPage() {
+    const entries = state.audit.filter(
+      (e) =>
+        !filters.q ||
+        (e.actorName + " " + e.action + " " + e.details)
+          .toLowerCase()
+          .includes(filters.q.toLowerCase()),
+    );
+    return (
+      heading(
+        "Uma história que fica registrada",
+        "Rastreabilidade dos cadastros, relacionamentos e contribuições.",
+      ) +
+      `<div class="filters"><div class="search">${icon("search")}<input id="search" type="search" aria-label="Buscar na auditoria" placeholder="Buscar ação ou responsável…" value="${esc(filters.q)}"></div></div><section class="panel">${
+        entries.length
+          ? `<div class="table-wrap"><table><thead><tr><th>Quando</th><th>Responsável</th><th>Ação</th><th>Detalhes</th></tr></thead><tbody>${entries
+              .slice(0, 100)
+              .map(
+                (e) =>
+                  `<tr><td>${time(e.at)}</td><td>${esc(e.actorName)}</td><td>${esc(e.action)}</td><td style="max-width:380px;white-space:normal">${esc(e.details)}</td></tr>`,
+              )
+              .join("")}</tbody></table></div>`
+          : empty("As ações da equipe aparecerão aqui.")
+      }</section>`
+    );
+  }
+  function renderLogin() {
+    const token = new URLSearchParams(location.hash.slice(1)).get("redefinir");
+    $("#app").markup =
+      `<div class="login"><section class="login-story">${brand()}<div><div class="eyebrow" style="margin-top:50px">Relacionamentos que transformam</div><h1>A esperança floresce quando cuidamos dos nossos laços.</h1><p>Um espaço para acolher, cultivar relacionamentos e acompanhar cada gesto de generosidade.</p><div class="art">${art()}</div></div><footer>Centro Espírita e Obras Sociais · Parnaíba, PI</footer></section><section class="login-content"><div class="login-theme">${themeButton()}</div><div class="login-form"><div class="eyebrow">Bem-vindo ao nosso espaço</div><h2>${token ? "Uma nova senha" : "Que bom ter você aqui."}</h2><p>${token ? "Escolha uma senha para voltar a cuidar dos nossos laços." : "Entre para acompanhar os relacionamentos e contribuições da nossa comunidade."}</p><form id="auth-form"><div class="error" role="alert"></div>${token ? field("Nova senha", "password", "", "password", 'required minlength="8" autocomplete="new-password"') + field("Confirme a nova senha", "confirm", "", "password", 'required minlength="8" autocomplete="new-password"') : field("Seu e-mail", "email", "", "email", 'required autocomplete="username"') + field("Sua senha", "password", "", "password", 'required autocomplete="current-password"')}<button class="btn" type="submit">${token ? "Salvar nova senha" : "Entrar no nosso espaço"} ${icon("arrow")}</button></form>${token ? "" : `<div style="text-align:right;margin-top:14px"><button class="text-link" data-action="recover">Esqueci minha senha</button></div>`}</div></section></div>`;
+    $("#auth-form").onsubmit = async (e) => {
+      e.preventDefault();
+      const f = e.currentTarget,
+        btn = $("button[type=submit]", f);
+      btn.disabled = true;
+      try {
+        const d = Object.fromEntries(runtime.formEntries(f));
+        if (token) {
+          const r = state.resets.find(
+            (r) => r.token === token && !r.used && r.expires > Date.now(),
+          );
+          if (!r)
+            throw Error(
+              "Link de recuperação inválido ou expirado. Solicite outro.",
+            );
+          if (d.password !== d.confirm)
+            throw Error("As senhas precisam ser iguais.");
+          const u = state.users.find((u) => u.id === r.userId);
+          Object.assign(u, await credentials(d.password));
+          r.used = true;
+          D.audit(state, u, "Senha redefinida", null, "Recuperação de acesso");
+          save();
+          location.hash = "";
+          renderLogin();
+          toast("Senha redefinida. Você já pode entrar.");
+          return;
+        }
+        if (Date.now() < lockUntil)
+          throw Error("Aguarde um minuto antes de tentar novamente.");
+        const u = state.users.find(
+          (u) =>
+            u.email.toLowerCase() === d.email.trim().toLowerCase() && u.active,
+        );
+        if (!u || (await hashPassword(d.password, u.salt)) !== u.passwordHash) {
+          loginAttempts++;
+          if (loginAttempts >= 5) {
+            lockUntil = Date.now() + 60000;
+            loginAttempts = 0;
+          }
+          throw Error("E-mail ou senha inválidos, ou usuário inativo.");
+        }
+        user = u;
+        loginAttempts = 0;
+        lastActivity = Date.now();
+        sessionStorage.setItem(
+          SESSION,
+          JSON.stringify({ id: u.id, last: lastActivity }),
+        );
+        page = u.role === "Administrador" ? "dashboard" : "funnel";
+        D.audit(state, user, "Acesso ao sistema", null, "Sessão iniciada");
+        D.reconcile(state, { id: "system", name: "Sistema" });
+        D.ensureAutomations(state);
+        save();
+        render();
+      } catch (err) {
+        $(".error", f).textContent = err.message;
+        btn.disabled = false;
+      }
+    };
+  }
+  function bindPage() {
+    const all = $("[data-action=select-filtered]");
+    if (all) {
+      const eligible = visibleContacts().filter(emailEligible);
+      all.indeterminate =
+        !all.checked && eligible.some((c) => selectedContacts.has(c.id));
+    }
+    const search = $("#search");
+    if (search)
+      search.on("input", (e) => {
+        filters.q = e.target.value;
+        contactPage = 1;
+        const pos = e.target.selectionStart;
+        $("#main").markup = content() + pageFooter();
+        bindPage();
+        $("#search")?.focus();
+        $("#search")?.setSelectionRange(pos, pos);
+      });
+    $$(".filters select,.filters input[type=month]").forEach(
+      (el) =>
+        (el.onchange = () => {
+          filters[el.name] = el.value;
+          contactPage = 1;
+          render();
+        }),
+    );
+    $$(".card[draggable=true]").forEach(
+      (el) =>
+        (el.ondragstart = (e) => {
+          e.dataTransfer.setData("text/plain", el.dataset.contact);
+          e.dataTransfer.effectAllowed = "move";
+        }),
+    );
+    $$(".column[data-stage]").forEach((el) => {
+      el.ondragover = (e) => {
+        e.preventDefault();
+        el.classList.add("over");
+      };
+      el.ondragleave = () => el.classList.remove("over");
+      el.ondrop = (e) => {
+        e.preventDefault();
+        el.classList.remove("over");
+        try {
+          activeUser();
+          D.move(
+            state,
+            user,
+            e.dataTransfer.getData("text/plain"),
+            Number(el.dataset.stage),
+          );
+          save();
+          render();
+          toast("Etapa atualizada no histórico.");
+        } catch (err) {
+          toast(err.message, "error");
+        }
+      };
+    });
+  }
+  let returnFocus;
+  function closeModal() {
+    const m = $("#modal");
+    if (m.open) m.close();
+    m.markup = "";
+    m.classList.remove("wide");
+    returnFocus?.focus();
+  }
+  function modal(title, body, footer = "", wide = false) {
+    returnFocus = view.activeElement;
+    const m = $("#modal");
+    m.classList.toggle("wide", wide);
+    m.markup = `<div class="modal-head"><h2 id="modal-title">${title}</h2><button type="button" class="icon-button" data-action="close" aria-label="Fechar">${icon("close")}</button></div><div class="modal-body">${body}</div>${footer ? `<div class="modal-foot">${footer}</div>` : ""}`;
+    if (!m.open) m.showModal();
+    m.scrollTop = 0;
+  }
+  function formModal(
+    title,
+    body,
+    onSubmit,
+    label = "Salvar",
+    wide = false,
+    auth = false,
+  ) {
+    modal(
+      title,
+      `<form id="modal-form"><div class="error" role="alert"></div>${body}<div class="modal-foot" style="margin:12px -28px -24px">${button("Cancelar", "close")}<button type="submit" class="btn">${label} ${icon("check")}</button></div></form>`,
+      "",
+      wide,
+    );
+    $("#modal-form").onsubmit = async (e) => {
+      e.preventDefault();
+      const f = e.currentTarget,
+        submit = $("[type=submit]", f);
+      submit.disabled = true;
+      try {
+        if (!auth) activeUser();
+        await onSubmit(Object.fromEntries(runtime.formEntries(f)), f);
+      } catch (err) {
+        $(".error", f).textContent = err.message;
+        submit.disabled = false;
+      }
+    };
+  }
+  function contactForm(id = "", draft = null) {
+    const existing = state.contacts.find((c) => c.id === id),
+      c = draft ||
+        existing || {
+          name: "",
+          email: "",
+          phone: "",
+          type: "PF",
+          document: "",
+          origin: "Indicação",
+          funnel: "Inbound",
+          stage: 0,
+          owner: user.id,
+        };
+    formModal(
+      existing ? "Editar relacionamento" : "Um novo relacionamento",
+      `<div class="step-label">1 de 2 · Conhecer a pessoa</div><div class="form-grid">${field("Nome completo / razão social *", "name", c.name, "text", 'required maxlength="120"')}${selectField(
+        "Tipo de pessoa",
+        "type",
+        [
+          ["PF", "Pessoa física"],
+          ["PJ", "Pessoa jurídica"],
+        ],
+        c.type,
+      )}${field("E-mail", "email", c.email, "email", 'maxlength="150"')}${field("Telefone / WhatsApp", "phone", c.phone, "tel", 'maxlength="16" placeholder="(86) 99999-9999"')}${field("CPF / CNPJ (opcional)", "document", c.document, "text", 'inputmode="numeric" maxlength="18"')}<div class="full"><small>Informe pelo menos um e-mail ou telefone para mantermos esse laço.</small></div></div>`,
+      (d) => {
+        const merged = { ...c, ...d };
+        D.validateContact(merged, state.contacts, id, true);
+        contactStepTwo(id, merged);
+      },
+      "Continuar",
+    );
+    const phone = $f("[name=phone]"),
+      doc = $f("[name=document]");
+    phone.oninput = () => {
+      let n = phone.value.replace(/\D/g, "").slice(0, 11);
+      phone.value = n
+        .replace(/^(\d{2})(\d)/, "($1) $2")
+        .replace(/(\d{4,5})(\d{4})$/, "$1-$2");
+    };
+    doc.oninput = () => {
+      const n = doc.value
+        .replace(/\D/g, "")
+        .slice(0, $f("[name=type]").value === "PF" ? 11 : 14);
+      doc.value =
+        $f("[name=type]").value === "PF"
+          ? n
+              .replace(/^(\d{3})(\d)/, "$1.$2")
+              .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+              .replace(/(\d{3})(\d{2})$/, "$1-$2")
+          : n
+              .replace(/^(\d{2})(\d)/, "$1.$2")
+              .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+              .replace(/(\d{3})(\d{4})/, "$1/$2")
+              .replace(/(\d{4})(\d{2})$/, "$1-$2");
+    };
+    $f("[name=type]").onchange = () => doc.oninput();
+  }
+  function contactStepTwo(id, c) {
+    formModal(
+      "Onde começa esse caminho?",
+      `<div class="step-label">2 de 2 · Origem e relacionamento</div><div class="notice green">${esc(c.name)} · ${esc(c.email || c.phone)}</div><div class="form-grid">${selectField("Origem", "origin", D.ORIGINS, c.origin)}${selectField("Classificação", "funnel", ["Inbound", "Outbound"], c.funnel)}${selectField(
+        "Etapa inicial",
+        "stage",
+        D.STAGES.map((s, i) => [i, s]),
+        c.stage,
+      )}${
+        user.role === "Administrador"
+          ? selectField(
+              "Operador responsável",
+              "owner",
+              state.users.filter((u) => u.active).map((u) => [u.id, u.name]),
+              c.owner,
+            )
+          : ""
+      }</div>${button("Voltar aos dados", "contact-back", id, "quiet")}`,
+      (d) => {
+        const merged = {
+          ...c,
+          ...d,
+          funnel: ["Site", "Instagram"].includes(d.origin)
+            ? "Inbound"
+            : d.funnel,
+          stage: Number(d.stage),
+          owner: d.owner || c.owner,
+        };
+        D.validateContact(merged, state.contacts, id);
+        const existing = state.contacts.find((c) => c.id === id);
+        if (existing) {
+          if (D.outsideCadence(existing) && merged.stage !== existing.stage)
+            throw Error("Retome a cadência antes de mover a etapa.");
+          const oldStage = existing.stage;
+          if (
+            existing.origin !== merged.origin ||
+            existing.funnel !== merged.funnel
+          )
+            D.audit(
+              state,
+              user,
+              "Origem e direção alteradas",
+              id,
+              existing.origin +
+                " / " +
+                existing.funnel +
+                " → " +
+                merged.origin +
+                " / " +
+                merged.funnel,
+            );
+          Object.assign(existing, merged, { stage: oldStage });
+          D.move(state, user, id, merged.stage);
+          D.audit(state, user, "Cadastro atualizado", id);
+        } else {
+          merged.id = D.uid();
+          merged.created = new Date().toISOString();
+          merged.history = [];
+          merged.optOut = false;
+          state.contacts.unshift(merged);
+          save();
+          D.audit(
+            state,
+            user,
+            "Contato cadastrado",
+            merged.id,
+            merged.origin + " · " + merged.funnel,
+          );
+        }
+        save();
+        closeModal();
+        render();
+        profile(existing?.id || merged.id);
+        toast("Relacionamento salvo com carinho.");
+      },
+      "Salvar contato",
+    );
+    $("[data-action=contact-back]").onclick = (e) => {
+      e.stopPropagation();
+      contactForm(id, c);
+    };
+    bindOriginDirection();
+  }
+  function profile(id) {
+    const c = state.contacts.find((c) => c.id === id);
+    if (!c) throw Error("Contato não encontrado.");
+    const ps = state.payments.filter((p) => p.contactId === id);
+    modal(
+      "Ficha de relacionamento",
+      `<div class="profile-hero">${avatar(c)}<div><h2>${esc(c.name)}</h2><p style="margin-top:7px">${statusBadge(c)} ${badge(c.type, "gold")}  ${c.optOut ? badge("Descadastrado de e-mails", "gray") : ""}</p></div></div><div class="profile-grid"><div><dl class="details"><div><dt>E-mail</dt><dd>${esc(c.email || "Não informado")}</dd></div><div><dt>Telefone</dt><dd>${esc(c.phone || "Não informado")}</dd></div><div><dt>CPF / CNPJ</dt><dd>${esc(c.document || "Não informado")}</dd></div><div><dt>Origem</dt><dd>${esc(c.origin)} · ${c.funnel}</dd></div><div><dt>Responsável</dt><dd>${esc(state.users.find((u) => u.id === c.owner)?.name || "—")}</dd></div><div><dt>Desde</dt><dd>${date(c.created)}</dd></div></dl><div class="notice green"><small>Etapa atual</small><p>${D.STAGES[c.stage]}</p>${D.outsideCadence(c) ? `<p>Etapa de perdas: ${esc(D.LOSS_STAGES[D.lossStage(c)])}</p>${c.cadenceExit.followUpDate ? `<p>Retomada agendada: ${date(c.cadenceExit.followUpDate)}</p>` : ""}<p><b>Fora da cadência</b> · ${esc(c.cadenceExit.reason)}</p><p>${esc(c.cadenceExit.note)}</p><p>Saída: ${date(c.cadenceExit.date)} · ${esc(c.cadenceExit.actorName)}</p><p>Última etapa: ${esc(D.STAGES[c.cadenceExit.stage])}</p>` : ""}${c.plan ? `<p style="margin-top:10px">Compromisso: <b>${money(c.plan.amount)}</b> · ${c.plan.mode}${c.plan.due ? " · Dia " + c.plan.due : ""}</p>` : ""}</div>${enrollmentInfo(c)}${intakeSummary(c)}${contactTasks(c)}<div class="profile-actions">${button("Editar", "contact", id, "secondary small", "edit")}${D.outsideCadence(c) ? button("Mover etapa de perdas", "loss-move", id, "secondary small") + button("Retomar cadência", "cadence-resume", id, "secondary small") : button("Registrar perda", "cadence-exit", id, "secondary small")}${!c.plan && !D.outsideCadence(c) ? button("Mover etapa", "move", id, "secondary small", "funnel") + button("Converter em doador", "convert", id, "small", "heart") : c.plan ? button("Registrar doação", "payment", id, "small", "plus") + button("Alterar status", "donor-status", id, "secondary small") : ""}${button("Registrar interação", "interaction", id, "secondary small", "plus")}${button("Registrar resposta", "response", id, "secondary small", "mail")}${c.plan ? button("Comprovante de adesão", "adherence", id, "quiet small", "file") : ""}${!c.optOut && c.email ? button("Enviar mensagem", "contact-mail", id, "quiet small", "mail") : ""}${user.role === "Administrador" ? button("Excluir contato", "delete-contact", id, "danger small") : ""}</div>${
+        ps.length
+          ? `<h3 style="margin:22px 0 8px">Contribuições · ${money(total(ps))}</h3>${ps
+              .slice(0, 4)
+              .map(
+                (p) =>
+                  `<div class="list-row"><div><p>${money(p.amount)}</p><small>${date(p.date)} · ${monthLabel(p.period)}</small></div><button class="icon-button right" data-action="receipt" data-id="${p.id}" aria-label="Ver recibo">${icon("file")}</button></div>`,
+              )
+              .join("")}`
+          : ""
+      }</div><div><div class="flex between" style="margin-bottom:22px"><h3>Uma história de relacionamento</h3><small>${c.history.length} registros</small></div><div class="timeline">${c.history.map((e) => `<article class="event"><h3>${esc(e.action)}</h3><p>${esc(e.details)}</p><small>${time(e.at)} · ${esc(e.actorName)}</small></article>`).join("")}</div></div></div>`,
+      "",
+      true,
+    );
+  }
+  function moveForm(id) {
+    const c = state.contacts.find((c) => c.id === id);
+    formModal(
+      "Um novo passo no relacionamento",
+      `<p class="muted" style="margin-bottom:20px">${esc(c.name)}</p>${selectField(
+        "Próxima etapa",
+        "stage",
+        D.STAGES.map((s, i) => [i, s]),
+        c.stage,
+      )}<div class="field"><label for="f-note">Anotações da mudança</label><textarea id="f-note" name="note" placeholder="O que motivou este novo passo?" maxlength="1500"></textarea></div>`,
+      (d) => {
+        D.move(state, user, id, Number(d.stage), d.note);
+        save();
+        closeModal();
+        render();
+        toast("Etapa atualizada e registrada no histórico.");
+      },
+      "Atualizar etapa",
+    );
+  }
+  function convertForm(id) {
+    const c = state.contacts.find((c) => c.id === id);
+    formModal(
+      "Um novo gesto de generosidade",
+      `<div class="notice green">${esc(c.name)} passará a fazer parte da nossa rede de doadores.</div>${selectField("Modalidade de contribuição", "mode", ["Recorrente", "Pontual"], "Recorrente")}${field("Valor compromissado (R$) *", "amount", 100, "number", 'required min="0.01" max="999999999" step="0.01"')}${field("Dia do vencimento mensal *", "due", 10, "number", 'required min="1" max="28" step="1"')}<small>O comprovante de adesão será gerado após a conversão.</small>`,
+      (d) => {
+        D.convert(state, user, id, {
+          mode: d.mode,
+          amount: Number(d.amount),
+          due: Number(d.due),
+        });
+        save();
+        closeModal();
+        render();
+        adherence(id);
+        toast("Contato convertido em doador ativo.");
+      },
+      "Confirmar adesão",
+    );
+    $f("[name=mode]").onchange = () => {
+      const input = $f("[name=due]"),
+        recurring = $f("[name=mode]").value === "Recorrente";
+      input.closest(".field").hidden = !recurring;
+      input.required = recurring;
+      input.disabled = !recurring;
+    };
+  }
+  function adherence(id) {
+    const c = state.contacts.find((c) => c.id === id);
+    modal(
+      "Comprovante de adesão",
+      `<div class="receipt">${brand()}<div class="eyebrow">Cuidar, contribuir, transformar</div><h2>Compromisso de contribuição</h2><p>${esc(c.name)} · ${esc(c.email || c.phone)}</p><strong class="amount">${money(c.plan.amount)}</strong><dl class="details"><div><dt>Modalidade</dt><dd>${c.plan.mode}</dd></div><div><dt>Adesão</dt><dd>${monthLabel(c.plan.since)}</dd></div><div><dt>Vencimento</dt><dd>${c.plan.due ? "Todo dia " + c.plan.due : "Contribuição única"}</dd></div><div><dt>Situação</dt><dd>${c.plan.status}</dd></div></dl><p>Obrigado por caminhar com a Luz da Esperança.</p><small>Comprovante de adesão · Não representa confirmação de pagamento.</small></div>`,
+      button("Fechar", "close") +
+        button("Imprimir / salvar PDF", "print", "", "", "download"),
+    );
+  }
+  function interactionForm(id) {
+    formModal(
+      "Cultive esse relacionamento",
+      `${selectField("Como foi o contato?", "channel", ["Telefone", "WhatsApp", "Reunião", "E-mail"], "WhatsApp")}${field("Data e hora do contato", "date", new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16), "datetime-local", "required")}<div class="field"><label for="f-summary">Resumo da conversa *</label><textarea id="f-summary" name="summary" required maxlength="3000" placeholder="Conte o que foi conversado e os próximos passos."></textarea></div><small>Este registro preserva o histórico e identifica o operador responsável.</small>`,
+      (d) => {
+        if (new Date(d.date) > new Date())
+          throw Error("A data do contato não pode ser futura.");
+        if (!d.summary.trim()) throw Error("Informe o resumo da conversa.");
+        D.audit(
+          state,
+          user,
+          "Contato por " + d.channel,
+          id,
+          d.summary + "\nData do contato: " + time(d.date),
+        );
+        save();
+        closeModal();
+        render();
+        profile(id);
+        toast("Interação registrada no histórico.");
+      },
+      "Registrar interação",
+    );
+  }
+  function responseForm(id) {
+    formModal(
+      "Escutar também faz parte",
+      `${selectField("Classificação da resposta", "classification", ["Positiva", "Negativa", "Pedido de descadastro"], "Positiva")}<div class="field"><label for="f-message">Conteúdo da resposta *</label><textarea id="f-message" name="message" required maxlength="3000" placeholder="Registre a resposta recebida."></textarea></div>`,
+      (d) => {
+        if (!d.message.trim()) throw Error("Informe o conteúdo da resposta.");
+        const c = state.contacts.find((c) => c.id === id);
+        if (d.classification === "Pedido de descadastro") c.optOut = true;
+        D.audit(
+          state,
+          user,
+          "Resposta de e-mail: " + d.classification,
+          id,
+          d.message,
+        );
+        save();
+        closeModal();
+        render();
+        profile(id);
+        toast(
+          d.classification === "Pedido de descadastro"
+            ? "Descadastro registrado. Novos envios serão bloqueados."
+            : "Resposta registrada.",
+        );
+      },
+      "Registrar resposta",
+    );
+  }
+  function statusForm(id) {
+    const c = state.contacts.find((c) => c.id === id);
+    formModal(
+      "Cuidar do ciclo do doador",
+      `${selectField("Novo status", "status", D.DONOR_STATUSES, c.plan.status)}${field("Data do evento", "date", D.today(), "date", `required max="${D.today()}"`)}<p class="notice">Suspenso interrompe competências cujo vencimento ocorre entre a suspensão (inclusive) e a retomada (exclusive). Débitos anteriores permanecem. Recebimentos não reativam automaticamente o doador.</p><div class="field"><label for="f-reason">Motivo da alteração *</label><textarea id="f-reason" name="reason" required maxlength="2000"></textarea></div>`,
+      (d) => {
+        if (d.date > D.today()) throw Error("A data não pode ser futura.");
+        if (!d.reason.trim()) throw Error("Informe o motivo.");
+        D.changeStatus(state, user, id, d);
+        save();
+        closeModal();
+        render();
+        profile(id);
+        toast("Status atualizado e histórico preservado.");
+      },
+      "Atualizar status",
+    );
+  }
+  function paymentForm(id = "", period = "", draft = null) {
+    const c = state.contacts.find((c) => c.id === id),
+      pending = D.pending(state).find(
+        (p) => p.contactId === id && p.period === period,
+      ),
+      d = draft || {
+        contactId: id,
+        amount: pending?.amount || c?.plan?.amount || "",
+        date: D.today(),
+        period: period || D.month(),
+        destination: "Obras sociais",
+      };
+    formModal(
+      "Registrar doação recebida",
+      `<div class="step-label">1 de 2 · Doação já recebida</div><div class="form-grid">${selectField(
+        "Doador *",
+        "contactId",
+        state.contacts.filter((c) => c.plan).map((c) => [c.id, c.name]),
+        d.contactId,
+        "Selecione um doador",
+      )}${field("Valor recebido (R$) *", "amount", d.amount, "number", 'required min="0.01" max="999999999" step="0.01"')}${field("Data do pagamento *", "date", d.date, "date", 'required max="' + D.today() + '"')}${field("Competência mensal *", "period", d.period, "month", "required")}${selectField("Destinação do recurso", "destination", D.DESTINATIONS, d.destination)}<div class="full"><small>Informe o valor que já foi efetivamente recebido, em reais, e a data do pagamento. Este registro gera o recebimento e o recibo da doação.</small></div></div>`,
+      (data) => {
+        if (!data.contactId) throw Error("Selecione um doador.");
+        if (Number(data.amount) <= 0)
+          throw Error("Informe um valor maior que zero.");
+        paymentStepTwo({ ...data, amount: Number(data.amount) });
+      },
+      "Continuar",
+    );
+    const pick = $f("[name=contactId]");
+    pick.required = true;
+    pick.onchange = () => {
+      const donor = state.contacts.find((c) => c.id === pick.value);
+      if (donor) {
+        $f("[name=amount]").value = donor.plan.amount;
+        $f("[name=period]").min = donor.plan.since;
+        $f("[name=period]").closest(".field").hidden =
+          donor.plan.mode === "Pontual";
+        $f("[name=period]").required = donor.plan.mode === "Recorrente";
+      }
+    };
+    if (c) {
+      $f("[name=period]").min = c.plan.since;
+      $f("[name=period]").closest(".field").hidden = c.plan.mode === "Pontual";
+      $f("[name=period]").required = c.plan.mode === "Recorrente";
+    }
+  }
+  function fileData(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () =>
+        resolve({ name: file.name, type: file.type, data: r.result });
+      r.onerror = () => reject(Error("Não foi possível ler o arquivo."));
+      r.readAsDataURL(file);
+    });
+  }
+  function paymentStepTwo(d) {
+    formModal(
+      "Vincule o comprovante",
+      `<div class="step-label">2 de 2 · Identificação do recebimento</div><div class="notice green">${esc(state.contacts.find((c) => c.id === d.contactId).name)} · <b>${money(d.amount)}</b> · ${date(d.date)}</div>${field("Código / referência Pix", "pix", "", "text", 'maxlength="180" placeholder="Identificador do recebimento"')}${field("Comprovante (opcional)", "attachment", "", "file", 'accept="image/png,image/jpeg,application/pdf"')}<small>Informe a referência Pix ou anexe um comprovante (PNG, JPG ou PDF, até 2 MB).</small><div style="margin-top:14px">${button("Voltar à contribuição", "payment-back", "", "quiet")}</div>`,
+      async (data, f) => {
+        const file = $f("[name=attachment]", f).files[0];
+        if (
+          file &&
+          (file.size > 2 * 1024 * 1024 ||
+            !["image/png", "image/jpeg", "application/pdf"].includes(file.type))
+        )
+          throw Error("Anexe PNG, JPG ou PDF de até 2 MB.");
+        const attachment = file ? await fileData(file) : null,
+          p = D.payment(state, user, { ...d, pix: data.pix, attachment });
+        save();
+        closeModal();
+        render();
+        receipt(p.id);
+        toast("Doação registrada. Pendência e indicadores atualizados.");
+      },
+      "Confirmar recebimento",
+    );
+    $("[data-action=payment-back]").onclick = (e) => {
+      e.stopPropagation();
+      paymentForm(d.contactId, d.period, d);
+    };
+  }
+  function receipt(id) {
+    const p = state.payments.find((p) => p.id === id),
+      c = state.contacts.find((c) => c.id === p.contactId);
+    modal(
+      "Recibo de contribuição",
+      `<div class="receipt">${brand()}<div class="eyebrow">${p.receipt}</div><h2>Obrigado por espalhar esperança.</h2><p>Recebemos de <b>${esc(c.name)}</b> uma contribuição financeira para apoiar nossas obras sociais.</p><strong class="amount">${money(p.amount)}</strong><dl class="details"><div><dt>Data do pagamento</dt><dd>${date(p.date)}</dd></div><div><dt>Competência</dt><dd>${monthLabel(p.period)}</dd></div><div><dt>Modalidade</dt><dd>${p.mode}</dd></div><div><dt>Destinação</dt><dd>${esc(p.destination)}</dd></div><div><dt>Referência Pix</dt><dd>${esc(p.pix || "Comprovante anexo")}</dd></div><div><dt>Responsável pelo registro</dt><dd>${esc(p.actorName)} · ${time(p.at)}</dd></div></dl>${p.attachment ? button("Baixar comprovante · " + esc(p.attachment.name), "attachment", p.id, "secondary small", "download") : ""}<p>Centro Espírita e Obras Sociais Luz da Esperança<br>Parnaíba, PI</p></div>`,
+      button("Fechar", "close") +
+        button("Enviar por e-mail", "receipt-email", id, "secondary", "mail") +
+        button("Imprimir / salvar PDF", "print", "", "", "download"),
+    );
+  }
+  function listForm(id = "") {
+    const l = state.lists.find((l) => l.id === id);
+    formModal(
+      l ? "Editar lista" : "Uma nova rede de conexões",
+      `${field("Nome da lista *", "name", l?.name || "", "text", 'required maxlength="120"')}${field("Categoria dos contatos *", "category", l?.category || "", "text", 'required maxlength="80"')}<div class="field"><label for="f-description">Descrição da lista</label><textarea id="f-description" name="description" maxlength="1500">${esc(l?.description || "")}</textarea></div>`,
+      (d) => {
+        if (!d.name.trim() || !d.category.trim())
+          throw Error("Informe nome e categoria.");
+        if (l) Object.assign(l, d);
+        else
+          state.lists.unshift({ ...d, id: D.uid(), contacts: [], imports: [] });
+        D.audit(
+          state,
+          user,
+          l ? "Lista atualizada" : "Lista criada",
+          null,
+          d.name,
+        );
+        save();
+        closeModal();
+        render();
+        toast("Lista salva.");
+      },
+      "Salvar lista",
+    );
+  }
+  function listDetail(id) {
+    const l = state.lists.find((l) => l.id === id);
+    modal(
+      esc(l.name),
+      `<p class="muted" style="margin-bottom:20px">${esc(l.description)}</p><div class="flex" style="flex-wrap:wrap;margin-bottom:20px">${button("Importar CSV / Excel", "import", id, "", "upload")}${button("Adicionar contatos", "list-contacts", id, "secondary", "plus")}${button("Criar campanha", "campaign", id, "secondary", "mail")}${button("Editar lista", "list", id, "quiet", "edit")}</div><div class="table-wrap"><table><thead><tr><th>Contato</th><th>Envios</th><th></th></tr></thead><tbody>${l.contacts
+        .map((id) => state.contacts.find((c) => c.id === id))
+        .filter(Boolean)
+        .map(
+          (c) =>
+            `<tr><td>${contactCell(c)}</td><td>${badge(c.optOut ? "Descadastrado" : c.email ? "Elegível" : "Sem e-mail", c.optOut ? "gray" : "")}</td><td><button class="icon-button" data-action="remove-list-contact" data-id="${l.id + "|" + c.id}" aria-label="Remover da lista">${icon("close")}</button></td></tr>`,
+        )
+        .join(
+          "",
+        )}</tbody></table></div>${!l.contacts.length ? empty("Importe um arquivo ou adicione contatos da sua rede.") : ""}${l.imports.length ? `<h3 style="margin:22px 0 10px">Última importação</h3><div class="notice green">${l.imports[0].imported} importados · ${l.imports[0].duplicates} duplicados · ${l.imports[0].invalid} inválidos</div>${l.imports[0].rows.length ? `<details><summary>Ver registros descartados</summary><p style="font-size:11px;margin-top:10px">${l.imports[0].rows.map(esc).join("<br>")}</p></details>` : ""}` : ""}`,
+      "",
+      true,
+    );
+  }
+  function enrollmentInfo(c) {
+    if (!D.enrolled(state, c)) return "";
+    const since = c.plan.adheredAt,
+      days = since
+        ? Math.max(0, Math.floor((Date.now() - Date.parse(since)) / 86400000))
+        : null;
+    return `<p class="notice enrolled-alert"><b>Sócio Inscrito · Doador</b><br>Colabora com a Luz da Esperança. Nenhuma doação financeira registrada.<br>${since ? "Adesão: " + date(since) + " · " + days + " dias desde a adesão" : "Data de adesão não disponível"}</p>`;
+  }
+  function contactTasks(c) {
+    const ts = state.tasks.filter((t) => t.contactId === c.id);
+    return ts.length
+      ? `<section class="contact-tasks"><h3>Acompanhamento</h3>${ts.map((t) => `<div class="list-row"><div><p>${esc(t.text)}</p><small>${t.due ? "Prazo: " + date(t.due) : date(t.at)} · ${esc(state.users.find((u) => u.id === t.owner)?.name || "Equipe")} · ${t.done ? "Concluído" : "Pendente"}</small></div>${!t.done ? button("Concluir", "task-done", t.id, "quiet small", "check") : ""}</div>`).join("")}</section>`
+      : "";
+  }
+  function intakeSummary(c) {
+    D.ensureExtensions(state);
+    const run = state.intakeRuns.find((r) => r.contactId === c.id);
+    if (!run) return "";
+    return `<section class="intake-summary"><h3>Resultado do pós-cadastro</h3><small>${run.rule ? esc(run.rule.name) + " · versão " + run.rule.version + " · Configurada por " + esc(run.rule.updatedByName) : "Nenhuma ação operacional configurada."}</small>${run.actions.map((x) => `<p>${badge(x.status, x.status === "falha" || x.status === "bloqueada" ? "red" : "")} ${esc(x.type)} · ${esc(x.detail)}<small class="automation-meta">${time(x.at)} · Sistema</small></p>`).join("")}${run.actions.some((x) => x.status === "falha") ? button("Recuperar ações com falha", "intake-retry", run.id, "secondary small") : ""}<p><small>Mensagens e respectivos resultados constam no histórico de automações e na linha do tempo.</small></p></section>`;
+  }
+  function intakeRulesHTML() {
+    D.ensureExtensions(state);
+    return `<section class="panel intake-rules"><div class="panel-header"><div><h2>Tratamento pós-cadastro</h2><p>Etapa inicial, responsável, lista e acompanhamento por origem.</p></div>${button("Nova regra pós-cadastro", "intake-new", "", "secondary small", "plus")}</div><div class="panel-body">${state.intakeRules.map((r) => `<article class="list-row"><div><h3>${esc(r.name)} ${badge(r.active ? "Ativa" : "Pausada", r.active ? "" : "gray")}</h3><p>${esc(r.origin)} · ${esc(r.direction)}</p><small>Versão ${r.version} · ${esc(r.updatedByName)}</small></div><div class="flex">${button("Editar", "intake-edit", r.id, "quiet small")}${r.active ? button("Pausar", "intake-pause", r.id, "secondary small") : button("Revisar e ativar", "intake-review", r.id, "secondary small")}</div></article>`).join("") || "<p>Nenhuma regra operacional configurada. As mensagens continuam nas regras de e-mail abaixo.</p>"}</div></section>`;
+  }
+  function intakeForm(id = "", draft = null) {
+    D.ensureExtensions(state);
+    const r = draft ||
+      state.intakeRules.find((r) => r.id === id) || {
+        name: "",
+        origin: "Site",
+        direction: "Inbound",
+        stage: "",
+        owner: "",
+        listId: "",
+        taskText: "",
+        days: 1,
+      };
+    formModal(
+      "Regra de pós-cadastro",
+      `<div class="step-label">1 de 2 · Origem e destino</div>${field("Nome da regra *", "name", r.name, "text", 'required maxlength="120"')}${selectField("Origem", "origin", D.ORIGINS, r.origin)}${selectField("Classificação", "funnel", ["Inbound", "Outbound"], r.direction)}${selectField(
+        "Etapa inicial",
+        "stage",
+        D.STAGES.map((n, i) => [i, n]),
+        r.stage,
+        "Manter etapa do cadastro",
+      )}`,
+      (d) =>
+        intakeActionsForm(id, {
+          ...r,
+          ...d,
+          direction: ["Site", "Instagram"].includes(d.origin)
+            ? "Inbound"
+            : d.funnel,
+        }),
+      "Continuar",
+    );
+    bindOriginDirection();
+  }
+  function intakeActionsForm(id, r) {
+    const owners = state.users.filter(
+      (u) => u.active && (user.role === "Administrador" || u.id === user.id),
+    );
+    formModal(
+      "Ações após o cadastro",
+      `<div class="step-label">2 de 2 · Acompanhamento</div>${selectField(
+        "Responsável fixo",
+        "owner",
+        owners.map((u) => [u.id, u.name]),
+        r.owner,
+        "Manter responsável do cadastro",
+      )}${selectField(
+        "Lista de entrada",
+        "listId",
+        state.lists.map((l) => [l.id, l.name]),
+        r.listId,
+        "Não incluir em lista",
+      )}${field("Tarefa de acompanhamento", "taskText", r.taskText, "text", 'maxlength="500"')}${field("Prazo da tarefa (dias após cadastro)", "days", r.days, "number", 'required min="0" max="365" step="1"')}<p class="notice">As boas-vindas usam as regras de e-mail em Automações. Esta regra vale para novos cadastros após a ativação.</p>${button("Voltar", "intake-back-local", "", "quiet")}`,
+      (d) => {
+        const rule = D.saveIntake(state, user, { ...r, ...d }, id);
+        save();
+        intakeReview(rule.id);
+      },
+      "Salvar e revisar",
+    );
+    $("[data-action=intake-back-local]").onclick = (e) => {
+      e.stopPropagation();
+      intakeForm(id, {
+        ...r,
+        ...Object.fromEntries(runtime.formEntries($("#modal-form"))),
+      });
+    };
+  }
+  function intakeReview(id) {
+    const r = state.intakeRules.find((r) => r.id === id);
+    if (!r) throw Error("Regra não encontrada.");
+    modal(
+      "Revisar pós-cadastro",
+      `<h3>${esc(r.name)}</h3><p class="notice">${esc(r.origin)} · ${esc(r.direction)}</p><dl class="details"><div><dt>Etapa inicial</dt><dd>${r.stage === "" ? "Manter cadastro" : esc(D.STAGES[r.stage])}</dd></div><div><dt>Responsável</dt><dd>${esc(state.users.find((u) => u.id === r.owner)?.name || "Manter cadastro")}</dd></div><div><dt>Lista de entrada</dt><dd>${esc(state.lists.find((l) => l.id === r.listId)?.name || "Nenhuma")}</dd></div><div><dt>Tarefa</dt><dd>${esc(r.taskText || "Nenhuma")}${r.taskText ? " · Prazo: " + r.days + " dias" : ""}</dd></div></dl><p>Mensagens usam AJ-03. Não há aplicação retroativa nem integração externa.</p>`,
+      button("Fechar", "close") + button("Ativar regra", "intake-activate", id),
+    );
+  }
+  function receiptEmailForm(id) {
+    D.ensureExtensions(state);
+    const snapshot = D.receiptSnapshot(state, id),
+      c = state.contacts.find((c) => c.id === snapshot.contactId),
+      last = state.receiptSends.find((r) => r.paymentId === id);
+    formModal(
+      "Enviar recibo por e-mail",
+      `<p class="notice">Envio simulado. O recibo é representado como anexo PDF; nenhum arquivo será transmitido. O comprovante Pix não será incluído.</p>${last ? `<p>Último envio simulado: ${time(last.at)} · ${esc(last.recipient)}. Confirmar novamente registra um reenvio intencional.</p>` : ""}${c.optOut ? '<p class="notice red">Contato descadastrado. O envio está bloqueado; impressão/PDF continua disponível.</p>' : ""}${field("Destinatário *", "recipient", c.email, "email", 'required maxlength="150"')}${field("Assunto *", "subject", "Recibo " + snapshot.receipt, "text", 'required maxlength="180"')}<div class="field"><label for="f-body">Mensagem *</label><textarea id="f-body" name="body" required maxlength="5000">${esc("Olá, " + c.name + "! Segue o recibo da sua contribuição. Obrigado por apoiar a Luz da Esperança.")}</textarea></div><section class="receipt-preview"><h3>Recibo ${esc(snapshot.receipt)}</h3><p>${esc(snapshot.donor)} · ${money(snapshot.amount)}</p><p>${date(snapshot.date)} · Competência ${monthLabel(snapshot.period)}</p><p>${esc(snapshot.mode)} · ${esc(snapshot.destination)}</p><small>Centro Espírita e Obras Sociais Luz da Esperança · Parnaíba, PI<br>Representação do anexo PDF na simulação; nenhum arquivo PDF foi gerado por este envio.</small></section>`,
+      (d) => {
+        modal(
+          "Revisar envio do recibo",
+          `<p><b>Para:</b> ${esc(d.recipient)}</p><h3>${esc(d.subject)}</h3><div class="campaign-preview">${esc(d.body)}</div><p>Recibo ${esc(snapshot.receipt)} · ${esc(snapshot.donor)} · ${money(snapshot.amount)} · ${date(snapshot.date)} · ${monthLabel(snapshot.period)} · ${esc(snapshot.mode)} · ${esc(snapshot.destination)}</p><p class="notice">Envio simulado de recibo, sem entrega real. O endereço informado não altera o cadastro.</p>`,
+          button("Voltar", "receipt-back-local") +
+            button(
+              "Confirmar envio simulado",
+              "receipt-send-local",
+              "",
+              "",
+              "mail",
+            ),
+        );
+        $("[data-action=receipt-back-local]").onclick = (e) => {
+          e.stopPropagation();
+          receiptEmailForm(id);
+          $f("[name=recipient]").value = d.recipient;
+          $f("[name=subject]").value = d.subject;
+          $f("[name=body]").value = d.body;
+        };
+        $("[data-action=receipt-send-local]").onclick = (e) => {
+          e.stopPropagation();
+          try {
+            activeUser();
+            D.sendReceipt(state, user, id, d);
+            save();
+            receipt(id);
+            toast("Envio simulado registrado. Nenhum e-mail real foi enviado.");
+          } catch (err) {
+            toast(err.message, "error");
+          }
+        };
+      },
+      "Revisar envio",
+      true,
+    );
+    if (c.optOut) $("[type=submit]", $("#modal-form")).disabled = true;
+  }
+  function reportPrint() {
+    admin();
+    const { period, payments: ps } = D.reportData(state, filters);
+    // Use the same rendered report and dataset as the screen, omitting interactive controls.
+    const doc = view.createElement("div");
+    doc.markup = reports();
+    doc.findAll("button,.filters,.page-heading").forEach((el) => el.remove());
+    modal(
+      "Exportar relatório em PDF",
+      `<p class="print-help notice">Use Imprimir / salvar PDF e selecione Salvar como PDF no navegador.</p><article class="print-report">${brand()}<h1>Relatório administrativo</h1><p>Período: ${monthLabel(period)} · Modalidade: ${esc(filters.mode || "Todas")} · Etapa: ${filters.stage ? esc(D.STAGES[Number(filters.stage)]) : "Todas"}</p><p>Emitido em ${new Date().toLocaleString("pt-BR")} · ${ps.length} contribuições · Total ${money(total(ps))}</p>${doc.markup}</article>`,
+      button("Fechar", "close") +
+        button(
+          "Imprimir / salvar PDF",
+          "report-print-local",
+          "",
+          "",
+          "download",
+        ),
+      true,
+    );
+    $("[data-action=report-print-local]").onclick = (e) => {
+      e.stopPropagation();
+      try {
+        admin();
+        D.audit(
+          state,
+          user,
+          "Impressão de relatório solicitada",
+          null,
+          period +
+            " · " +
+            (filters.mode || "Todas as modalidades") +
+            " · " +
+            (filters.stage
+              ? D.STAGES[Number(filters.stage)]
+              : "Todas as etapas"),
+        );
+        save();
+        window.print();
+      } catch (err) {
+        toast(err.message, "error");
+      }
+    };
+  }
+  function exportReportCSV() {
+    admin();
+    const { period, payments: ps } = D.reportData(state, filters);
+    download(
+      "contribuicoes-luz.csv",
+      csv([
+        [
+          "Recibo",
+          "Doador",
+          "Valor R$",
+          "Pagamento",
+          "Competencia",
+          "Modalidade",
+          "Destinacao",
+          "Pix",
+          "Operador",
+        ],
+        ...ps.map((p) => [
+          p.receipt,
+          state.contacts.find((c) => c.id === p.contactId)?.name ||
+            "Contato não encontrado",
+          p.amount,
+          p.date,
+          p.period,
+          p.mode,
+          p.destination,
+          p.pix,
+          p.actorName,
+        ]),
+      ]),
+    );
+    D.audit(
+      state,
+      user,
+      "Relatório CSV exportado",
+      null,
+      period +
+        " · " +
+        (filters.mode || "Todas as modalidades") +
+        " · " +
+        (filters.stage ? D.STAGES[Number(filters.stage)] : "Todas as etapas"),
+    );
+    save();
+    toast("Relatório CSV exportado.");
+  }
+  function listContacts(id) {
+    const l = state.lists.find((l) => l.id === id),
+      chosen = new Set();
+    let current = [];
+    formModal(
+      "Adicionar à nossa rede",
+      `<p>${esc(l.name)}</p><div class="form-grid segment-filters">${field("Buscar nome ou e-mail", "q", "", "search")}${selectField(
+        "Vínculo",
+        "link",
+        [
+          ["donors", "Doadores"],
+          ["leads", "Potenciais doadores"],
+        ],
+        "",
+        "Todos os contatos",
+      )}${selectField("Status de doador", "status", D.DONOR_STATUSES, "", "Todos os status")}${selectField("Modalidade", "mode", ["Recorrente", "Pontual"], "", "Todas")}${selectField("Identificação", "enrolled", [["yes", "Sócio Inscrito"]], "", "Todas")}${selectField("Origem", "origin", D.ORIGINS, "", "Todas")}${selectField("Classificação", "direction", ["Inbound", "Outbound"], "", "Todas")}${selectField("Destinação recebida", "destination", D.DESTINATIONS, "", "Todas")}${field("Pagamento a partir de", "start", "", "date")}${field("Pagamento até", "end", "", "date")}</div><div class="selection-summary" aria-live="polite"></div><label class="select-filtered"><input type="checkbox" id="list-all"> Selecionar todos os resultados <span id="list-count"></span></label>${button("Limpar seleção", "list-clear-local", "", "quiet small")}<div class="check-list" id="list-results"></div>`,
+      () => {
+        if (!chosen.size) throw Error("Selecione pelo menos um contato.");
+        const n = D.addToList(state, user, id, [...chosen]);
+        save();
+        closeModal();
+        render();
+        listDetail(id);
+        toast(n + " contatos adicionados, sem duplicidades.");
+      },
+      "Adicionar contatos",
+      true,
+    );
+    const f = $("#modal-form"),
+      results = $("#list-results"),
+      all = $("#list-all");
+    const summary = () => {
+      const n = current.filter((c) => chosen.has(c.id)).length;
+      all.checked = current.length > 0 && n === current.length;
+      all.indeterminate = n > 0 && n < current.length;
+      all.disabled = !current.length;
+      $(".selection-summary", f).textContent =
+        chosen.size +
+        " selecionados · " +
+        [...chosen].filter((id) => !current.some((c) => c.id === id)).length +
+        " fora do resultado atual";
+      $("#list-count").textContent = "(" + current.length + ")";
+    };
+    const update = () => {
+      try {
+        current = D.segmentContacts(
+          state,
+          Object.fromEntries(runtime.formEntries(f)),
+          l.contacts,
+        );
+        $(".error", f).textContent = "";
+        results.markup =
+          current
+            .map(
+              (c) =>
+                `<label><input type="checkbox" value="${esc(c.id)}" ${chosen.has(c.id) ? "checked" : ""}>${esc(c.name)} <small>${esc(c.plan?.status || "Potencial doador")}${D.enrolled(state, c) ? " · Sócio Inscrito" : ""} · ${esc(c.email || c.phone)}</small></label>`,
+            )
+            .join("") || empty("Nenhum contato atende aos filtros.");
+        results.findAll("input").forEach(
+          (el) =>
+            (el.onchange = () => {
+              el.checked ? chosen.add(el.value) : chosen.delete(el.value);
+              summary();
+            }),
+        );
+        summary();
+      } catch (e) {
+        current = [];
+        results.markup = "";
+        $(".error", f).textContent = e.message;
+        summary();
+      }
+    };
+    $$(".segment-filters input,.segment-filters select", f).forEach(
+      (el) => (el.oninput = update),
+    );
+    all.onchange = () => {
+      current.forEach((c) =>
+        all.checked ? chosen.add(c.id) : chosen.delete(c.id),
+      );
+      update();
+    };
+    $("[data-action=list-clear-local]", f).onclick = (e) => {
+      e.stopPropagation();
+      chosen.clear();
+      update();
+    };
+    update();
+  }
+
+  async function excelRows(file) {
+    const buf = await file.arrayBuffer(),
+      v = new DataView(buf),
+      bytes = new Uint8Array(buf),
+      files = {};
+    let eocd = -1;
+    for (
+      let i = v.byteLength - 22;
+      i >= Math.max(0, v.byteLength - 65557);
+      i--
+    ) {
+      if (v.getUint32(i, true) === 0x06054b50) {
+        eocd = i;
+        break;
+      }
+    }
+    if (eocd < 0) throw Error("Excel inválido. Use .xlsx ou salve como CSV.");
+    let pos = v.getUint32(eocd + 16, true),
+      count = v.getUint16(eocd + 10, true),
+      budget = 0;
+    for (let i = 0; i < count; i++) {
+      if (v.getUint32(pos, true) !== 0x02014b50)
+        throw Error("Arquivo Excel inválido.");
+      const method = v.getUint16(pos + 10, true),
+        size = v.getUint32(pos + 20, true),
+        rawSize = v.getUint32(pos + 24, true),
+        nameLen = v.getUint16(pos + 28, true),
+        extraLen = v.getUint16(pos + 30, true),
+        commentLen = v.getUint16(pos + 32, true),
+        offset = v.getUint32(pos + 42, true),
+        name = new TextDecoder().decode(
+          bytes.slice(pos + 46, pos + 46 + nameLen),
+        );
+      pos += 46 + nameLen + extraLen + commentLen;
+      if (!/^xl\/(sharedStrings\.xml|worksheets\/sheet\d+\.xml)$/.test(name))
+        continue;
+      budget += rawSize;
+      if (budget > 20 * 1024 * 1024)
+        throw Error(
+          "Planilha muito grande. Importe até 20 MB de conteúdo descompactado.",
+        );
+      const start =
+          offset +
+          30 +
+          v.getUint16(offset + 26, true) +
+          v.getUint16(offset + 28, true),
+        compressed = bytes.slice(start, start + size);
+      let out;
+      if (method === 0) out = compressed;
+      else if (method === 8) {
+        try {
+          out = new Uint8Array(
+            await new Response(
+              new Blob([compressed])
+                .stream()
+                .pipeThrough(new DecompressionStream("deflate-raw")),
+            ).arrayBuffer(),
+          );
+        } catch {
+          throw Error(
+            "Este navegador não lê o Excel comprimido. Use um navegador atualizado ou salve como CSV.",
+          );
+        }
+      } else throw Error("Compressão Excel não suportada. Salve como CSV.");
+      files[name] = new TextDecoder().decode(out);
+    }
+    const parser = new DOMParser(),
+      strings = files["xl/sharedStrings.xml"]
+        ? [
+            ...parser
+              .parseFromString(files["xl/sharedStrings.xml"], "application/xml")
+              .getElementsByTagName("si"),
+          ].map((si) =>
+            [...si.getElementsByTagName("t")]
+              .map((t) => t.textContent)
+              .join(""),
+          )
+        : [];
+    const sheet = Object.keys(files)
+      .filter((n) => n.includes("worksheets/"))
+      .sort()[0];
+    if (!sheet) throw Error("Nenhuma planilha encontrada.");
+    const xml = parser.parseFromString(files[sheet], "application/xml");
+    if (xml.querySelector("parsererror")) throw Error("Planilha inválida.");
+    return [...xml.getElementsByTagName("row")].map((row) => {
+      const result = [];
+      for (const c of row.getElementsByTagName("c")) {
+        const ref = c.getAttribute("r") || "A",
+          col =
+            [...ref.replace(/\d/g, "")].reduce(
+              (n, ch) => n * 26 + ch.charCodeAt(0) - 64,
+              0,
+            ) - 1,
+          type = c.getAttribute("t"),
+          val = c.getElementsByTagName("v")[0]?.textContent || "";
+        result[col] =
+          type === "s"
+            ? strings[Number(val)] || ""
+            : type === "inlineStr"
+              ? [...c.getElementsByTagName("t")]
+                  .map((t) => t.textContent)
+                  .join("")
+              : val;
+      }
+      return result;
+    });
+  }
+  function importForm(id) {
+    formModal(
+      "Novos laços para a nossa lista",
+      `<div class="notice green">Importe CSV ou Excel (.xlsx) com as colunas <b>nome</b>, <b>email</b> e, opcionalmente, <b>telefone</b>. E-mails inválidos e duplicados serão descartados.</div>${field("Arquivo de contatos *", "file", "", "file", 'required accept=".csv,.xlsx"')}${button("Baixar modelo CSV", "csv-template", "", "quiet", "download")}<small style="display:block;margin-top:12px">Até 5 MB por arquivo. O relatório da importação fica disponível na lista.</small>`,
+      async (d, f) => {
+        const file = $("[name=file]", f).files[0];
+        if (file.size > 5 * 1024 * 1024)
+          throw Error("O arquivo deve ter até 5 MB.");
+        let rows;
+        if (/\.xlsx$/i.test(file.name)) rows = await excelRows(file);
+        else if (/\.csv$/i.test(file.name))
+          rows = D.parseCSV(await file.text());
+        else throw Error("Use CSV ou Excel .xlsx.");
+        if (rows.length > 10001)
+          throw Error("Importe até 10.000 contatos por arquivo.");
+        const l = state.lists.find((l) => l.id === id),
+          r = D.importRows(state, user, l, rows);
+        save();
+        closeModal();
+        render();
+        listDetail(id);
+        toast(
+          r.imported +
+            " contatos importados · " +
+            r.duplicates +
+            " duplicados · " +
+            r.invalid +
+            " inválidos",
+        );
+      },
+      "Importar contatos",
+    );
+  }
+  function campaignForm(listId = "", contactId = "") {
+    if (!state.lists.length && !contactId)
+      throw Error("Crie uma lista de contatos antes da campanha.");
+    formModal(
+      "Uma mensagem pode aproximar",
+      `${
+        contactId
+          ? `<div class="notice green">Para ${esc(state.contacts.find((c) => c.id === contactId).name)}</div>`
+          : selectField(
+              "Lista de destinatários *",
+              "listId",
+              state.lists.map((l) => [l.id, l.name]),
+              listId || state.lists[0]?.id,
+            )
+      }${field("Assunto da mensagem *", "subject", "", "text", 'required maxlength="180"')}<div class="field"><label for="f-body">Mensagem *</label><textarea id="f-body" name="body" required maxlength="10000" rows="6" placeholder="Olá! Queremos compartilhar um pouco do que estamos construindo juntos…"></textarea></div><small>Contatos descadastrados ou sem e-mail ficam fora do envio.</small>`,
+      (d) => {
+        const ids = contactId
+          ? [contactId]
+          : state.lists.find((l) => l.id === d.listId).contacts;
+        const eligible = ids.filter((id) => {
+          const c = state.contacts.find((c) => c.id === id);
+          return c?.email && !c.optOut;
+        });
+        if (!eligible.length)
+          throw Error("Nenhum destinatário elegível nesta lista.");
+        modal(
+          "Revise a mensagem",
+          `<div class="notice green">${eligible.length} destinatário(s) elegível(is) · ${ids.length - eligible.length} excluído(s)</div><h3 style="margin-bottom:15px">${esc(d.subject)}</h3><div class="campaign-preview">${esc(d.body)}</div>`,
+          button("Voltar", "campaign-back") +
+            button("Confirmar envio", "campaign-send", "", "", "mail"),
+        );
+        $("[data-action=campaign-send]").onclick = (e) => {
+          e.stopPropagation();
+          try {
+            activeUser();
+            const n = D.send(state, user, ids, d.subject, d.body);
+            save();
+            closeModal();
+            render();
+            toast(n + " mensagens registradas nas linhas do tempo.");
+          } catch (err) {
+            toast(err.message, "error");
+          }
+        };
+        $("[data-action=campaign-back]").onclick = (e) => {
+          e.stopPropagation();
+          campaignForm(d.listId, contactId);
+          $("[name=subject]").value = d.subject;
+          $("[name=body]").value = d.body;
+        };
+      },
+      "Revisar mensagem",
+    );
+  }
+  function userForm(id = "") {
+    admin();
+    const u = state.users.find((u) => u.id === id);
+    formModal(
+      u ? "Editar acesso" : "Uma nova pessoa na equipe",
+      `<div class="form-grid">${field("Nome completo *", "name", u?.name || "", "text", 'required maxlength="100"')}${field("E-mail de acesso *", "email", u?.email || "", "email", 'required maxlength="150"')}${selectField("Perfil de acesso", "role", ["Administrador", "Operador de Captação"], u?.role || "Operador de Captação")}${selectField(
+        "Status",
+        "active",
+        [
+          ["yes", "Ativo"],
+          ["no", "Inativo"],
+        ],
+        u?.active === false ? "no" : "yes",
+      )}${field(u ? "Nova senha (opcional)" : "Senha inicial *", "password", "", "password", (u ? "" : "required ") + 'minlength="8" autocomplete="new-password"')}<small>Use pelo menos 8 caracteres. Senhas são armazenadas por hash.</small></div>`,
+      async (d) => {
+        admin();
+        if (
+          state.users.some(
+            (x) =>
+              x.id !== id && x.email.toLowerCase() === d.email.toLowerCase(),
+          )
+        )
+          throw Error("Este e-mail já possui acesso.");
+        if (
+          u?.id === user.id &&
+          (d.role !== "Administrador" || d.active === "no")
+        )
+          throw Error(
+            "Você não pode remover seu próprio acesso administrativo.",
+          );
+        if (
+          u?.role === "Administrador" &&
+          (d.role !== "Administrador" || d.active === "no") &&
+          state.users.filter(
+            (x) => x.role === "Administrador" && x.active && x.id !== id,
+          ).length === 0
+        )
+          throw Error("Mantenha pelo menos um administrador ativo.");
+        const update = {
+          name: d.name.trim(),
+          email: d.email.trim(),
+          role: d.role,
+          active: d.active === "yes",
+        };
+        if (d.password) Object.assign(update, await credentials(d.password));
+        if (u) Object.assign(u, update);
+        else state.users.push({ ...update, id: D.uid() });
+        D.audit(
+          state,
+          user,
+          u ? "Usuário atualizado" : "Usuário cadastrado",
+          null,
+          d.name + " · " + d.role,
+        );
+        save();
+        closeModal();
+        render();
+        toast("Acesso da equipe atualizado.");
+      },
+      "Salvar acesso",
+    );
+  }
+  function recover() {
+    formModal(
+      "Vamos recuperar seu acesso",
+      `<p class="muted" style="margin-bottom:20px">Informe o e-mail cadastrado para receber as instruções.</p>${field("E-mail de recuperação", "email", "", "email", "required")}`,
+      (d) => {
+        const u = state.users.find(
+          (u) =>
+            u.email.toLowerCase() === d.email.trim().toLowerCase() && u.active,
+        );
+        if (!u) {
+          modal(
+            "Confira sua caixa de entrada",
+            "<p>Se o e-mail estiver cadastrado, você receberá as instruções de recuperação.</p>",
+            button("Voltar ao acesso", "close"),
+          );
+          return;
+        }
+        const token = D.uid();
+        state.resets.push({
+          token,
+          userId: u.id,
+          expires: Date.now() + 15 * 60 * 1000,
+          used: false,
+        });
+        save();
+        modal(
+          "Instruções de recuperação",
+          `<div class="notice green">As instruções foram preparadas para ${esc(u.email)}.</div><p style="margin-bottom:16px">No sistema, a entrega do e-mail é simulada. Use o link abaixo para redefinir a senha.</p><div class="campaign-preview">Olá, ${esc(u.name.split(" ")[0])}!<br>Você solicitou uma nova senha. Este link é válido por 15 minutos.</div><a class="btn" style="margin-top:20px" href="#redefinir=${token}" data-action="reset-link">Criar nova senha ${icon("arrow")}</a>`,
+          button("Fechar", "close"),
+        );
+      },
+      "Enviar instruções",
+      false,
+      true,
+    );
+  }
+  function tasks() {
+    modal(
+      "Cultivar nossos relacionamentos",
+      state.tasks
+        .filter((t) => !t.done)
+        .map(
+          (t) =>
+            `<div class="list-row"><div><h3>${esc(t.text)}</h3><small>${t.due ? "Prazo: " + date(t.due) : date(t.at)} · ${esc(state.users.find((u) => u.id === t.owner)?.name || "Equipe")} · ${t.intakeRunId ? "Acompanhamento" : "Reengajamento"}</small></div><div class="right flex">${button("Abrir contato", "profile", t.contactId, "secondary small")}<button class="icon-button" data-action="task-done" data-id="${t.id}" aria-label="Concluir ação">${icon("check")}</button></div></div>`,
+        )
+        .join("") ||
+        empty("Nenhuma ação pendente. Os laços estão sendo bem cuidados."),
+    );
+  }
+  function download(name, data, type = "text/csv;charset=utf-8") {
+    const a = view.createElement("a"),
+      url = URL.createObjectURL(new Blob([data], { type }));
+    a.href = url;
+    a.download = name;
+    a.click();
+    runtime.timeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function csv(rows) {
+    return (
+      "\uFEFF" +
+      rows
+        .map((r) =>
+          r
+            .map(
+              (v) =>
+                '"' +
+                String(v ?? "")
+                  .replace(/^[=+@-]/, "'$&")
+                  .replace(/"/g, '""') +
+                '"',
+            )
+            .join(";"),
+        )
+        .join("\r\n")
+    );
+  }
+  function exportContacts() {
+    const cs = filterContacts().filter((c) =>
+      page === "donors"
+        ? c.plan
+        : tab === "leads"
+          ? !c.plan
+          : tab === "donors"
+            ? c.plan
+            : true,
+    );
+    download(
+      "relacionamentos-luz.csv",
+      csv([
+        [
+          "Nome",
+          "Email",
+          "Telefone",
+          "Tipo",
+          "Origem",
+          "Funil",
+          "Etapa",
+          "Status",
+          "Identificação",
+        ],
+        ...cs.map((c) => [
+          c.name,
+          c.email,
+          c.phone,
+          c.type,
+          c.origin,
+          c.funnel,
+          D.STAGES[c.stage],
+          c.plan?.status || "Potencial doador",
+          D.enrolled(state, c) ? "Sócio Inscrito" : "",
+        ]),
+      ]),
+    );
+    toast("Relacionamentos exportados.");
+  }
+  function exportFinance(report = false) {
+    if (report) {
+      exportReportCSV();
+      return;
+    }
+    if (financeTab === "pending") {
+      const ps = D.pending(state).filter(
+        (p) =>
+          (!filters.period || p.period === filters.period) &&
+          (!filters.q ||
+            p.name.toLowerCase().includes(filters.q.toLowerCase())) &&
+          (!filters.status || p.overdue),
+      );
+      download(
+        "pendencias-luz.csv",
+        csv([
+          ["Doador", "Competencia", "Vencimento", "Saldo", "Situacao"],
+          ...ps.map((p) => [
+            p.name,
+            p.period,
+            p.due,
+            p.amount,
+            p.overdue ? "Em atraso" : "A vencer",
+          ]),
+        ]),
+      );
+      return;
+    }
+    const ps = state.payments.filter(
+      (p) =>
+        (!filters.period || p.date.startsWith(filters.period)) &&
+        (!filters.mode || p.mode === filters.mode) &&
+        (!filters.stage ||
+          String(state.contacts.find((c) => c.id === p.contactId)?.stage) ===
+            filters.stage) &&
+        (!filters.q ||
+          state.contacts
+            .find((c) => c.id === p.contactId)
+            ?.name.toLowerCase()
+            .includes(filters.q.toLowerCase())),
+    );
+    download(
+      "contribuicoes-luz.csv",
+      csv([
+        [
+          "Recibo",
+          "Doador",
+          "Valor R$",
+          "Pagamento",
+          "Competencia",
+          "Modalidade",
+          "Destinacao",
+          "Pix",
+          "Operador",
+        ],
+        ...ps.map((p) => [
+          p.receipt,
+          state.contacts.find((c) => c.id === p.contactId).name,
+          p.amount,
+          p.date,
+          p.period,
+          p.mode,
+          p.destination,
+          p.pix,
+          p.actorName,
+        ]),
+      ]),
+    );
+    toast("Contribuições exportadas.");
+  }
+  view.on("click", (e) => {
+    const b = e.target.closest("[data-action]");
+    if (!b || b.disabled) return;
+    const a = b.dataset.action,
+      id = b.dataset.id || "";
+    if (a === "theme") {
+      toggleTheme();
+      return;
+    }
+    try {
+      if (!["recover", "close", "reset-link"].includes(a)) activeUser();
+      switch (a) {
+        case "nav":
+          navigate(id);
+          break;
+        case "menu":
+          $(".sidebar").classList.toggle("open");
+          break;
+        case "logout":
+          D.audit(state, user, "Saída do sistema", null);
+          save();
+          logout();
+          break;
+        case "close":
+          closeModal();
+          break;
+        case "profile":
+          profile(id);
+          break;
+        case "contact":
+          contactForm(id);
+          break;
+        case "move":
+          moveForm(id);
+          break;
+        case "convert":
+          convertForm(id);
+          break;
+        case "adherence":
+          adherence(id);
+          break;
+        case "interaction":
+          interactionForm(id);
+          break;
+        case "response":
+          responseForm(id);
+          break;
+        case "donor-status":
+          statusForm(id);
+          break;
+        case "payment":
+          paymentForm(id);
+          break;
+        case "payment-pending": {
+          const [c, p] = id.split("|");
+          paymentForm(c, p);
+          break;
+        }
+        case "receipt":
+          receipt(id);
+          break;
+        case "receipt-email":
+          receiptEmailForm(id);
+          break;
+        case "report-pdf":
+          reportPrint();
+          break;
+        case "intake-new":
+          intakeForm();
+          break;
+        case "intake-edit":
+          intakeForm(id);
+          break;
+        case "intake-review":
+          intakeReview(id);
+          break;
+        case "intake-activate":
+          D.activateIntake(state, user, id, true);
+          save();
+          closeModal();
+          render();
+          break;
+        case "intake-pause":
+          D.activateIntake(state, user, id, false);
+          save();
+          render();
+          break;
+        case "intake-retry": {
+          const run = state.intakeRuns.find((r) => r.id === id);
+          D.retryIntake(state, user, id);
+          save();
+          profile(run.contactId);
+          break;
+        }
+        case "print":
+          window.print();
+          break;
+        case "attachment": {
+          const p = state.payments.find((p) => p.id === id);
+          const link = view.createElement("a");
+          link.href = p.attachment.data;
+          link.download = p.attachment.name;
+          link.click();
+          break;
+        }
+        case "loss-move":
+          moveLossForm(id);
+          break;
+        case "automation-new":
+          automationForm();
+          break;
+        case "automation-edit":
+          automationForm(id);
+          break;
+        case "automation-review":
+          automationReview(id);
+          break;
+        case "automation-pause":
+          D.setAutomationActive(state, user, id, false);
+          save();
+          render();
+          toast("Automação pausada. Envios pendentes cancelados.");
+          break;
+        case "automation-run":
+          automationRunDetail(id);
+          break;
+        case "automation-now":
+          D.processAutomations(state, new Date(), id);
+          save();
+          closeModal();
+          render();
+          automationRunDetail(id);
+          break;
+        case "automation-retry":
+          D.retryAutomation(state, user, id);
+          save();
+          closeModal();
+          render();
+          automationRunDetail(id);
+          break;
+        case "automation-cancel":
+          D.cancelAutomationRuns(
+            state,
+            (r) => r.id === id,
+            "Cancelamento solicitado por " + user.name,
+          );
+          save();
+          closeModal();
+          render();
+          automationRunDetail(id);
+          break;
+        case "cadence-exit":
+          exitCadenceForm(id);
+          break;
+        case "cadence-resume":
+          resumeCadenceForm(id);
+          break;
+        case "funnel-view":
+          funnelView = id;
+          render();
+          break;
+        case "funnel-stage":
+          funnelMobileStage = Number(id);
+          render();
+          break;
+        case "select-contact":
+          if (emailEligible(state.contacts.find((c) => c.id === id))) {
+            if (b.checked) selectedContacts.add(id);
+            else selectedContacts.delete(id);
+          }
+          render();
+          $('[data-action=select-contact][data-id="' + id + '"]')?.focus({
+            preventScroll: true,
+          });
+          break;
+        case "select-filtered": {
+          const eligible = visibleContacts().filter(emailEligible);
+          eligible.forEach((c) =>
+            b.checked
+              ? selectedContacts.add(c.id)
+              : selectedContacts.delete(c.id),
+          );
+          render();
+          $("[data-action=select-filtered]")?.focus({ preventScroll: true });
+          break;
+        }
+        case "clear-selection":
+          selectedContacts.clear();
+          render();
+          break;
+        case "bulk-email":
+          bulkEmailForm();
+          break;
+        case "email-new":
+          selectedContacts.clear();
+          emailComposeForm();
+          break;
+        case "email-tab":
+          emailTab = id;
+          filters.q = "";
+          filters.status = "";
+          render();
+          break;
+        case "email-edit": {
+          const m = state.mailings.find((m) => m.id === id);
+          selectedContacts = new Set(m.contacts);
+          emailComposeForm(m, id);
+          break;
+        }
+        case "email-review":
+          emailReview(id);
+          break;
+        case "email-pause":
+          D.setMailingStatus(state, user, id, "paused");
+          save();
+          render();
+          toast("Envios futuros pausados.");
+          break;
+        case "email-cancel":
+          emailCancel(id);
+          break;
+        case "email-detail":
+          emailMailingDetail(id);
+          break;
+        case "email-run":
+          emailRunDetail(id);
+          break;
+        case "email-simulate":
+          D.simulateMailing(state, user, id);
+          save();
+          render();
+          emailMailingDetail(id);
+          break;
+        case "email-pick":
+          if (emailEligible(state.contacts.find((c) => c.id === id))) {
+            if (b.checked) selectedContacts.add(id);
+            else selectedContacts.delete(id);
+          }
+          updateEmailRecipients();
+          break;
+        case "email-select-all":
+          recipientMatches()
+            .filter(emailEligible)
+            .forEach((c) =>
+              b.checked
+                ? selectedContacts.add(c.id)
+                : selectedContacts.delete(c.id),
+            );
+          updateEmailRecipients();
+          break;
+        case "email-clear":
+          selectedContacts.clear();
+          updateEmailRecipients();
+          break;
+        case "contact-tab":
+          tab = id;
+          contactPage = 1;
+          render();
+          break;
+        case "finance-tab":
+          financeTab = id;
+          filters.mode = "";
+          filters.status = "";
+          render();
+          break;
+        case "clear":
+          filters = {
+            q: "",
+            origin: "",
+            owner: "",
+            period: "",
+            funnel: "",
+            status: "",
+            mode: "",
+            stage: "",
+          };
+          render();
+          break;
+        case "prev":
+          contactPage--;
+          render();
+          break;
+        case "next":
+          contactPage++;
+          render();
+          break;
+        case "list":
+          listForm(id);
+          break;
+        case "list-detail":
+          listDetail(id);
+          break;
+        case "list-contacts":
+          listContacts(id);
+          break;
+        case "import":
+          importForm(id);
+          break;
+        case "csv-template":
+          download(
+            "modelo-contatos-luz.csv",
+            csv([
+              ["nome", "email", "telefone"],
+              ["Novo Contato", "novo@exemplo.com", "86999990000"],
+            ]),
+          );
+          break;
+        case "campaign":
+          campaignForm(id);
+          break;
+        case "contact-mail":
+          campaignForm("", id);
+          break;
+        case "campaign-detail": {
+          const c = state.campaigns.find((c) => c.id === id);
+          modal(
+            esc(c.subject),
+            `<p class="muted" style="margin-bottom:18px">${time(c.at)} · ${c.contacts.length} destinatários</p><div class="campaign-preview">${esc(c.body)}</div><h3 style="margin:22px 0 10px">Destinatários</h3><p style="font-size:12px">${c.contacts.map((id) => esc(state.contacts.find((c) => c.id === id)?.name || "Contato removido")).join(", ")}</p>`,
+          );
+          break;
+        }
+        case "remove-list-contact": {
+          const [l, c] = id.split("|"),
+            list = state.lists.find((x) => x.id === l);
+          list.contacts = list.contacts.filter((x) => x !== c);
+          D.audit(state, user, "Contato removido da lista", c, list.name);
+          save();
+          render();
+          listDetail(l);
+          break;
+        }
+        case "user":
+          userForm(id);
+          break;
+        case "recover":
+          recover();
+          break;
+        case "reset-link":
+          closeModal();
+          runtime.timeout(() => {
+            user = null;
+            sessionStorage.removeItem(SESSION);
+            render();
+          }, 0);
+          break;
+        case "tasks":
+          tasks();
+          break;
+        case "task-done": {
+          const t = state.tasks.find((t) => t.id === id);
+          t.done = true;
+          D.audit(
+            state,
+            user,
+            t.intakeRunId
+              ? "Acompanhamento concluído"
+              : "Reengajamento concluído",
+            t.contactId,
+            t.text,
+          );
+          save();
+          render();
+          tasks();
+          break;
+        }
+        case "export-contacts":
+          exportContacts();
+          break;
+        case "export-finance":
+          exportFinance();
+          break;
+        case "export-report":
+          exportFinance(true);
+          break;
+        case "delete-contact": {
+          admin();
+          const c = state.contacts.find((c) => c.id === id);
+          if (state.payments.some((p) => p.contactId === id)) {
+            modal(
+              "Uma história que precisa ser preservada",
+              "<p>Este doador possui histórico financeiro e seu cadastro não pode ser excluído. Para encerrar a recorrência, altere o status para Cancelado.</p>",
+              button("Voltar à ficha", "profile", id),
+            );
+            break;
+          }
+          modal(
+            "Excluir este relacionamento?",
+            `<p>O cadastro de <b>${esc(c.name)}</b> será removido. Esta ação requer confirmação.</p>`,
+            button("Manter cadastro", "profile", id) +
+              button("Confirmar exclusão", "confirm-delete", id, "danger"),
+          );
+          break;
+        }
+        case "confirm-delete": {
+          admin();
+          if (state.payments.some((p) => p.contactId === id))
+            throw Error("Este contato possui histórico financeiro.");
+          const c = state.contacts.find((c) => c.id === id);
+          D.audit(state, user, "Contato excluído", null, c.name);
+          state.contacts = state.contacts.filter((c) => c.id !== id);
+          state.lists.forEach(
+            (l) => (l.contacts = l.contacts.filter((x) => x !== id)),
+          );
+          state.tasks = state.tasks.filter((t) => t.contactId !== id);
+          save();
+          closeModal();
+          render();
+          toast("Cadastro excluído.");
+          break;
+        }
+      }
+    } catch (err) {
+      toast(err.message, "error");
+    }
+  });
+  $("#modal").on("click", (e) => {
+    if (e.target === $("#modal")) {
+      const r = e.target.getBoundingClientRect();
+      if (
+        e.clientX < r.left ||
+        e.clientX > r.right ||
+        e.clientY < r.top ||
+        e.clientY > r.bottom
+      )
+        closeModal();
+    }
+  });
+  ["pointerdown", "keydown"].forEach((event) =>
+    view.on(event, () => {
+      if (user && Date.now() - lastActivity <= 30 * 60 * 1000) {
+        lastActivity = Date.now();
+        sessionStorage.setItem(
+          SESSION,
+          JSON.stringify({ id: user.id, last: lastActivity }),
+        );
+      }
+    }),
+  );
+  runtime.interval(() => {
+    if (user) {
+      if (Date.now() - lastActivity > 30 * 60 * 1000)
+        logout("Sua sessão foi encerrada por inatividade.");
+      else if (!state.users.find((u) => u.id === user.id)?.active)
+        logout("Seu acesso foi inativado.");
+      else if (D.processAutomations(state) + D.processMailings(state)) {
+        save();
+        if (page === "emails" && !$("#modal").open) render();
+      }
+    }
+  }, 15000);
+  runtime.onWindow("hashchange", () => {
+    if (!user) {
+      closeModal();
+      render();
+    }
+  });
+  runtime.onWindow("storage", (e) => {
+    if (e.key === THEME_KEY) {
+      applyTheme(
+        ["light", "dark"].includes(e.newValue)
+          ? e.newValue
+          : matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light",
+      );
+      return;
+    }
+    if (e.key === KEY && e.newValue) {
+      try {
+        state = D.repairLegacyHistory(JSON.parse(e.newValue));
+        if (user) {
+          const u = state.users.find((u) => u.id === user.id);
+          if (!u?.active) {
+            logout("Seu acesso foi inativado.");
+            return;
+          }
+          user = u;
+          closeModal();
+          render();
+        }
+      } catch {
+        toast(
+          "Não foi possível sincronizar os dados deste navegador.",
+          "error",
+        );
+      }
+    }
+  });
+  runtime.onMedia("change", (e) => {
+    try {
+      if (!localStorage.getItem(THEME_KEY))
+        applyTheme(e.matches ? "dark" : "light");
+    } catch {}
+  });
+  async function init() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      state = raw ? D.repairLegacyHistory(JSON.parse(raw)) : D.createEmptyState();
+      if (state.version !== 1 || !Array.isArray(state.contacts))
+        throw Error("Dados locais incompatíveis.");
+      if (!state.users.length) {
+        state.users = [
+          {
+            id: "admin",
+            name: "Administrador",
+            email: "admin@luz.exemplo",
+            role: "Administrador",
+            active: true,
+            ...(await credentials("Esperanca@2026")),
+          },
+          {
+            id: "operator",
+            name: "Operador",
+            email: "operador@luz.exemplo",
+            role: "Operador de Captação",
+            active: true,
+            ...(await credentials("Esperanca@2026")),
+          },
+        ];
+      }
+      const rawSession = sessionStorage.getItem(SESSION),
+        session = rawSession ? JSON.parse(rawSession) : null;
+      if (
+        session &&
+        Date.now() - session.last < 30 * 60 * 1000 &&
+        !location.hash.includes("redefinir=")
+      ) {
+        user = state.users.find((u) => u.id === session.id && u.active);
+        lastActivity = session.last;
+      }
+      D.reconcile(state, { id: "system", name: "Sistema" });
+      save();
+      render();
+    } catch (err) {
+      $("#app").markup =
+        `<div class="login-content" style="min-height:100vh"><div class="login-form">${brand()}<h2 style="margin-top:35px">Vamos preparar nosso espaço.</h2><p>${esc(err.message)}</p><p>Execute <b>npm run dev</b> e abra <b>http://localhost:3000</b>.</p><small>Para remover dados locais incompatíveis, limpe o armazenamento deste site no navegador.</small></div></div>`;
+    }
+  }
+  init().finally(model.changed);
+  function recipientMatches() {
+    const query = ($f("#email-recipient-search")?.value || "")
+      .trim()
+      .toLocaleLowerCase("pt-BR");
+    const link = $f("[name=recipientLink]")?.value,
+      origin = $f("[name=recipientOrigin]")?.value,
+      list = state.lists.find(
+        (l) => l.id === $f("[name=recipientList]")?.value,
+      );
+    return state.contacts.filter(
+      (c) =>
+        (!query ||
+          [c.name, c.email].some((x) =>
+            String(x || "")
+              .toLocaleLowerCase("pt-BR")
+              .includes(query),
+          )) &&
+        (!link || (link === "leads" ? !c.plan : Boolean(c.plan))) &&
+        (!origin || c.origin === origin) &&
+        (!list || list.contacts.includes(c.id)),
+    );
+  }
+  function updateEmailRecipients() {
+    const focusedId =
+      view.activeElement?.dataset.action === "email-pick"
+        ? view.activeElement.dataset.id
+        : null;
+    cleanContactSelection();
+    const matches = recipientMatches(),
+      eligible = matches.filter(emailEligible),
+      allSelected =
+        eligible.length > 0 &&
+        eligible.every((c) => selectedContacts.has(c.id));
+    $f("#email-recipient-list").markup =
+      matches
+        .map(
+          (c) =>
+            `<label class="recipient-option ${selectedContacts.has(c.id) ? "is-picked" : ""} ${emailEligible(c) ? "" : "is-unavailable"}"><input type="checkbox" data-action="email-pick" data-id="${c.id}" ${selectedContacts.has(c.id) ? "checked" : ""} ${emailEligible(c) ? "" : "disabled"} aria-label="Enviar e-mail para ${esc(c.name)}"><span class="recipient-text"><b>${esc(c.name)}</b><small>${esc(c.email || "Sem e-mail cadastrado")}</small>${!emailEligible(c) ? `<span class="recipient-reason">${c.optOut ? "Descadastrado de e-mails" : "Sem e-mail válido"}</span>` : ""}</span></label>`,
+        )
+        .join("") || empty("Nenhum contato encontrado.");
+    const outside = [...selectedContacts].filter(
+      (id) => !matches.some((c) => c.id === id),
+    ).length;
+    $f("#email-selected-count").textContent =
+      selectedContacts.size +
+      " " +
+      (selectedContacts.size === 1
+        ? "destinatário selecionado"
+        : "destinatários selecionados") +
+      (outside ? " · " + outside + " fora do filtro" : "");
+    const all = $f("#email-select-all");
+    all.checked = allSelected;
+    all.indeterminate =
+      !allSelected && eligible.some((c) => selectedContacts.has(c.id));
+    all.disabled = !eligible.length;
+    $f("#email-filter-count").textContent = eligible.length + " disponíveis";
+    $f("[type=submit]").disabled = selectedContacts.size === 0;
+    if (focusedId)
+      $f('[data-action=email-pick][data-id="' + focusedId + '"]')?.focus({
+        preventScroll: true,
+      });
+  }
+  function bulkEmailForm(draft = { subject: "", body: "" }) {
+    emailComposeForm(draft);
+  }
+
+  $("#modal").on("close", () => {
+    if (!$("#modal").open && user && ["contacts", "donors"].includes(page))
+      render();
+  });
+}

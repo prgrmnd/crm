@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=20.19.0"
   },
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1",
@@ -12,19 +12,29 @@
     "start": "next start --hostname 127.0.0.1",
     "test": "node --test tests/*.test.cjs tests/*.test.js",
     "test:browser": "node tests/browser-parity.mjs",
-    "test:visual": "node tests/visual-parity.mjs"
+    "test:visual": "node tests/visual-parity.mjs",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
+    "dotenv": "^17.2.3",
     "next": "16.4.2",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "htmlparser2": "10.1.0",
     "css-select": "6.0.0",
     "domutils": "3.2.2",
-    "entities": "4.5.0"
+    "entities": "4.5.0",
+    "pg": "^8.16.3"
   },
   "devDependencies": {
+    "@types/pg": "^8.15.5",
     "playwright": "1.64.1",
-    "prettier": "3.9.10"
+    "prettier": "3.9.10",
+    "prisma": "7.10.0"
   }
 }

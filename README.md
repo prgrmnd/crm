@@ -2,7 +2,7 @@
 
 Aplicação independente em React e Next.js para gestão da Luz da Esperança. Não é necessário executar o servidor nem carregar arquivos do protótipo original.
 
-Requisito: Node.js 20.9 ou superior.
+Requisito: Node.js 20.19 ou superior e PostgreSQL 13 ou superior para o Prisma.
 
 ```powershell
 git clone --branch develop https://github.com/prgrmnd/crm.git
@@ -11,7 +11,19 @@ npm.cmd ci
 npm.cmd run dev
 ```
 
-O frontend não exige variáveis de ambiente para funcionar. O arquivo `.env.example` documenta essa configuração vazia; as variáveis opcionais usadas pelos scripts de validação podem ser definidas no terminal conforme necessário.
+O frontend continua funcionando sem conexão com o banco. Para usar Prisma, copie `.env.example` para `.env` e informe a URL do PostgreSQL em `DATABASE_URL`.
+
+## Banco de dados e Prisma
+
+O projeto usa Prisma ORM 7 com PostgreSQL. O modelo fica em `prisma/schema.prisma`, a configuração da CLI em `prisma.config.ts` e as migrations versionadas em `prisma/migrations/`.
+
+```powershell
+npm.cmd ci
+npm.cmd run db:generate
+npm.cmd run db:migrate
+```
+
+`db:migrate` aplica a migration local e requer um servidor PostgreSQL acessível pela `DATABASE_URL`. Para aplicar migrations já geradas em ambientes de implantação, use `npm.cmd run db:deploy`. O identificador opcional da logo (`logo_arquivo_id`) será ligado por FK a `arquivos.id` quando a PB-061 criar essa tabela.
 
 Abra `http://127.0.0.1:3000`. Para executar junto com o protótipo, use `npm.cmd run dev -- --port 3001`.
 

@@ -2,4 +2,7 @@ node_modules/
 .next/
 test-results/
 *.log
+.env*
+!.env.example
+src/generated/prisma/
 

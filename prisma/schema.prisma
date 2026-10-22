@@ -1,0 +1,25 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Instituicao {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm       DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
+  nome           String   @db.VarChar(180)
+  documento      String?  @unique(map: "instituicoes_documento_unico") @db.VarChar(14)
+  cidade         String   @db.VarChar(100)
+  uf             String   @db.Char(2)
+  // A FK será adicionada quando a tabela Arquivo for criada na PB-061.
+  logoArquivoId  String?  @map("logo_arquivo_id") @db.Uuid
+  fusoHorario    String   @default("America/Sao_Paulo") @map("fuso_horario") @db.VarChar(80)
+  emailRemetente String?  @map("email_remetente") @db.VarChar(254)
+  nomeRemetente  String?  @map("nome_remetente") @db.VarChar(180)
+  atualizadoEm   DateTime @default(now()) @map("atualizado_em") @db.Timestamptz(6)
+
+  @@map("instituicoes")
+}

@@ -1,4 +1,5 @@
 import D from "./domain.cjs";
+import { canDeleteContact, deleteContact } from "./contact-service";
 
 export function createCRMController(model) {
   const { view, runtime } = model;
@@ -60,8 +61,8 @@ export function createCRMController(model) {
   const date = (x) =>
     x
       ? new Date(x.length === 10 ? x + "T12:00:00" : x).toLocaleDateString(
-          "pt-BR",
-        )
+        "pt-BR",
+      )
       : "—";
   const time = (x) =>
     new Date(x).toLocaleString("pt-BR", {
@@ -127,13 +128,13 @@ export function createCRMController(model) {
   const donorBadge = (c) =>
     c.plan
       ? badge(
-          c.plan.status,
-          c.plan.status === "Inadimplente"
-            ? "red"
-            : c.plan.status === "Ativo"
-              ? ""
-              : "gray",
-        )
+        c.plan.status,
+        c.plan.status === "Inadimplente"
+          ? "red"
+          : c.plan.status === "Ativo"
+            ? ""
+            : "gray",
+      )
       : badge("Potencial doador", "gold");
   const statusBadge = (c) =>
     donorBadge(c) +
@@ -201,12 +202,12 @@ export function createCRMController(model) {
     if (!crypto.subtle)
       throw Error("Abra em http://localhost:3000 para usar a autenticação.");
     const key = await crypto.subtle.importKey(
-        "raw",
-        new TextEncoder().encode(password),
-        "PBKDF2",
-        false,
-        ["deriveBits"],
-      ),
+      "raw",
+      new TextEncoder().encode(password),
+      "PBKDF2",
+      false,
+      ["deriveBits"],
+    ),
       bits = await crypto.subtle.deriveBits(
         {
           name: "PBKDF2",
@@ -345,8 +346,8 @@ export function createCRMController(model) {
       data = [];
     for (let offset = -5; offset <= 0; offset++) {
       const m = D.month(
-          new Date(d.getFullYear(), d.getMonth() + offset, 1, 12),
-        ),
+        new Date(d.getFullYear(), d.getMonth() + offset, 1, 12),
+      ),
         ps = paymentsFor(m);
       data.push({
         m,
@@ -379,15 +380,14 @@ export function createCRMController(model) {
         "Um olhar sobre os relacionamentos que tornam nossa missão possível.",
         button("Registrar doação", "payment", "", "", "plus"),
       ) +
-      `<section class="welcome"><div><div class="eyebrow">Pequenos gestos. Novas possibilidades.</div><h2>Juntos, a esperança ganha força.</h2><p>Acompanhe cada contribuição e cultive os laços de quem ajuda a transformar a vida da nossa comunidade.</p></div>${art()}</section><div class="flex between" style="margin-bottom:15px"><h3>Nosso impacto em números</h3><small>${new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</small></div><section class="metrics">${metric("Arrecadado neste mês", money(total(ps)), ps.length + " contribuições recebidas", "wallet")}${metric("Doadores ativos", active.length, donors.length + " doadores cadastrados", "heart")}${metric("Receita mensal prevista", money(rec), "Compromissos recorrentes ativos", "leaf")}${metric("Pendências em atraso", money(total(pending)), pending.length + " competências aguardando baixa", "clock", true)}</section><div class="dashboard-grid"><section class="panel"><div class="panel-header"><div><h2>Uma história de generosidade</h2><p>Contribuições recebidas nos últimos seis meses</p></div><div class="legend"><span><i></i>Recorrentes</span><span><i class="gold"></i>Pontuais</span></div></div><div class="panel-body">${chart()}<div class="chart-footer"><span>Cada contribuição tem um destino.</span><strong>${money(total(ps))} neste mês</strong></div></div></section><section class="panel"><div class="panel-header"><div><h2>Caminhos até a doação</h2><p>Potenciais doadores em cada etapa</p></div></div><div class="panel-body">${funnelSummary()}${button("Ver funil completo", "nav", "funnel", "quiet", "arrow")}</div></section><section class="panel"><div class="panel-header"><div><h2>Contribuições mais recentes</h2><p>Gestos que fazem a diferença</p></div>${button("Ver todas", "nav", "finance", "quiet", "arrow")}</div>${paymentTable([...state.payments].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4), true)}</section><section class="panel"><div class="panel-header"><div><h2>Hora de cultivar os laços</h2><p>Relacionamentos que precisam de atenção</p></div>${icon("leaf")}</div><div class="panel-body">${
-        state.tasks
-          .filter((t) => !t.done)
-          .slice(0, 3)
-          .map(
-            (t) =>
-              `<div class="list-row"><span class="avatar">${icon("heart")}</span><div><p>${esc(t.text)}</p><small>Reengajamento · doador recorrente</small></div><button class="icon-button right" data-action="profile" data-id="${t.contactId}" aria-label="Abrir contato">${icon("arrow")}</button></div>`,
-          )
-          .join("") || empty("Todos os relacionamentos estão em dia.")
+      `<section class="welcome"><div><div class="eyebrow">Pequenos gestos. Novas possibilidades.</div><h2>Juntos, a esperança ganha força.</h2><p>Acompanhe cada contribuição e cultive os laços de quem ajuda a transformar a vida da nossa comunidade.</p></div>${art()}</section><div class="flex between" style="margin-bottom:15px"><h3>Nosso impacto em números</h3><small>${new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</small></div><section class="metrics">${metric("Arrecadado neste mês", money(total(ps)), ps.length + " contribuições recebidas", "wallet")}${metric("Doadores ativos", active.length, donors.length + " doadores cadastrados", "heart")}${metric("Receita mensal prevista", money(rec), "Compromissos recorrentes ativos", "leaf")}${metric("Pendências em atraso", money(total(pending)), pending.length + " competências aguardando baixa", "clock", true)}</section><div class="dashboard-grid"><section class="panel"><div class="panel-header"><div><h2>Uma história de generosidade</h2><p>Contribuições recebidas nos últimos seis meses</p></div><div class="legend"><span><i></i>Recorrentes</span><span><i class="gold"></i>Pontuais</span></div></div><div class="panel-body">${chart()}<div class="chart-footer"><span>Cada contribuição tem um destino.</span><strong>${money(total(ps))} neste mês</strong></div></div></section><section class="panel"><div class="panel-header"><div><h2>Caminhos até a doação</h2><p>Potenciais doadores em cada etapa</p></div></div><div class="panel-body">${funnelSummary()}${button("Ver funil completo", "nav", "funnel", "quiet", "arrow")}</div></section><section class="panel"><div class="panel-header"><div><h2>Contribuições mais recentes</h2><p>Gestos que fazem a diferença</p></div>${button("Ver todas", "nav", "finance", "quiet", "arrow")}</div>${paymentTable([...state.payments].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4), true)}</section><section class="panel"><div class="panel-header"><div><h2>Hora de cultivar os laços</h2><p>Relacionamentos que precisam de atenção</p></div>${icon("leaf")}</div><div class="panel-body">${state.tasks
+        .filter((t) => !t.done)
+        .slice(0, 3)
+        .map(
+          (t) =>
+            `<div class="list-row"><span class="avatar">${icon("heart")}</span><div><p>${esc(t.text)}</p><small>Reengajamento · doador recorrente</small></div><button class="icon-button right" data-action="profile" data-id="${t.contactId}" aria-label="Abrir contato">${icon("arrow")}</button></div>`,
+        )
+        .join("") || empty("Todos os relacionamentos estão em dia.")
       }<div class="list-row"><span class="avatar">${icon("users")}</span><div><p>${state.contacts.filter((c) => !c.plan && !D.outsideCadence(c) && c.stage === 3).length} contatos prontos para doar</p><small>Na etapa de decisão de doação</small></div><button class="icon-button right" data-action="nav" data-id="funnel" aria-label="Ver funil">${icon("arrow")}</button></div></div></section></div>`
     );
   }
@@ -403,7 +403,7 @@ export function createCRMController(model) {
         (!filters.owner || c.owner === filters.owner) &&
         (!filters.period ||
           D.month(page === "losses" ? c.cadenceExit?.date || "" : c.created) ===
-            filters.period) &&
+          filters.period) &&
         (!filters.funnel || c.funnel === filters.funnel) &&
         (!filters.status ||
           (filters.status === "Sócio Inscrito"
@@ -441,15 +441,14 @@ export function createCRMController(model) {
       .join("")}</div></div>`;
     const board = `<div class="mobile-stages" aria-label="Etapa do funil">${stageNames.map((name, i) => `<button class="stage-tab ${funnelMobileStage === i ? "active" : ""}" data-action="funnel-stage" data-id="${i}" aria-pressed="${funnelMobileStage === i}">${esc(name)} <span>${cs.filter((c) => c.stage === i).length}</span></button>`).join("")}</div><div class="kanban compact-kanban">${D.STAGES.map(
       (name, i) =>
-        `<section class="column ${funnelMobileStage === i ? "is-selected" : ""}" data-stage="${i}" aria-label="${esc(name)}"><div class="column-heading"><span class="stage-number">${i + 1}</span><h3 title="${esc(name)}">${stageNames[i]}</h3><span class="stage-count">${cs.filter((c) => c.stage === i).length}</span></div><div class="column-cards" tabindex="0" role="region" aria-label="Contatos em ${esc(name)}">${
-          cs
-            .filter((c) => c.stage === i)
-            .map(
-              (c) =>
-                `<article class="card compact-card" draggable="true" data-contact="${c.id}" data-action="profile" data-id="${c.id}"><div class="compact-contact">${avatar(c)}<div class="compact-card-info"><button class="contact-name" data-action="profile" data-id="${c.id}" title="${esc(c.name)}">${esc(c.name)}</button><small>${esc(c.origin)} · ${c.funnel}</small></div><button class="icon-button card-move" data-action="move" data-id="${c.id}" aria-label="Mover etapa de ${esc(c.name)}" title="Mover etapa">${icon("arrow")}</button></div></article>`,
-            )
-            .join("") ||
-          '<div class="empty compact-empty">Nenhum contato nesta etapa.</div>'
+        `<section class="column ${funnelMobileStage === i ? "is-selected" : ""}" data-stage="${i}" aria-label="${esc(name)}"><div class="column-heading"><span class="stage-number">${i + 1}</span><h3 title="${esc(name)}">${stageNames[i]}</h3><span class="stage-count">${cs.filter((c) => c.stage === i).length}</span></div><div class="column-cards" tabindex="0" role="region" aria-label="Contatos em ${esc(name)}">${cs
+          .filter((c) => c.stage === i)
+          .map(
+            (c) =>
+              `<article class="card compact-card" draggable="true" data-contact="${c.id}" data-action="profile" data-id="${c.id}"><div class="compact-contact">${avatar(c)}<div class="compact-card-info"><button class="contact-name" data-action="profile" data-id="${c.id}" title="${esc(c.name)}">${esc(c.name)}</button><small>${esc(c.origin)} · ${c.funnel}</small></div><button class="icon-button card-move" data-action="move" data-id="${c.id}" aria-label="Mover etapa de ${esc(c.name)}" title="Mover etapa">${icon("arrow")}</button></div></article>`,
+          )
+          .join("") ||
+        '<div class="empty compact-empty">Nenhum contato nesta etapa.</div>'
         }</div></section>`,
     ).join(
       "",
@@ -487,13 +486,13 @@ export function createCRMController(model) {
         filters.funnel,
         "Inbound e Outbound",
       ) +
-        select(
-          "lossReason",
-          D.LOSS_REASONS,
-          filters.lossReason,
-          "Todos os motivos",
-        ) +
-        `<label class="filter-label">Mês da saída <input type="month" name="period" value="${esc(filters.period)}" aria-label="Mês da saída"></label>`,
+      select(
+        "lossReason",
+        D.LOSS_REASONS,
+        filters.lossReason,
+        "Todos os motivos",
+      ) +
+      `<label class="filter-label">Mês da saída <input type="month" name="period" value="${esc(filters.period)}" aria-label="Mês da saída"></label>`,
     );
     return (
       heading(
@@ -503,15 +502,14 @@ export function createCRMController(model) {
       filtersBar +
       `<div class="funnel-toolbar"><small>${cs.length} relacionamentos fora da cadência · incluindo doadores</small></div><div class="kanban compact-kanban losses-kanban">${D.LOSS_STAGES.map(
         (name, i) =>
-          `<section class="column is-selected" aria-label="Perdas em ${esc(name)}"><div class="column-heading"><span class="stage-number">${i + 1}</span><h3>${esc(name)}</h3><span class="stage-count">${cs.filter((c) => D.lossStage(c) === i).length}</span></div><div class="column-cards" tabindex="0" role="region" aria-label="Perdas em ${esc(name)}">${
-            cs
-              .filter((c) => D.lossStage(c) === i)
-              .map(
-                (c) =>
-                  `<button type="button" class="card compact-card loss-card" data-action="profile" data-id="${c.id}" aria-label="Ver detalhes de ${esc(c.name)}"><span class="compact-contact">${avatar(c)}<span class="compact-card-info"><span class="contact-name">${esc(c.name)}</span><small>${esc(c.origin)} · ${esc(c.funnel)}</small></span><span class="card-move" aria-hidden="true">${icon("arrow")}</span></span></button>`,
-              )
-              .join("") ||
-            '<div class="empty compact-empty">Nenhuma perda nesta etapa.</div>'
+          `<section class="column is-selected" aria-label="Perdas em ${esc(name)}"><div class="column-heading"><span class="stage-number">${i + 1}</span><h3>${esc(name)}</h3><span class="stage-count">${cs.filter((c) => D.lossStage(c) === i).length}</span></div><div class="column-cards" tabindex="0" role="region" aria-label="Perdas em ${esc(name)}">${cs
+            .filter((c) => D.lossStage(c) === i)
+            .map(
+              (c) =>
+                `<button type="button" class="card compact-card loss-card" data-action="profile" data-id="${c.id}" aria-label="Ver detalhes de ${esc(c.name)}"><span class="compact-contact">${avatar(c)}<span class="compact-card-info"><span class="contact-name">${esc(c.name)}</span><small>${esc(c.origin)} · ${esc(c.funnel)}</small></span><span class="card-move" aria-hidden="true">${icon("arrow")}</span></span></button>`,
+            )
+            .join("") ||
+          '<div class="empty compact-empty">Nenhuma perda nesta etapa.</div>'
           }</div></section>`,
       ).join("")}</div>`
     );
@@ -777,22 +775,22 @@ export function createCRMController(model) {
     if (!m) throw Error("E-mail não encontrado.");
     const first = D.firstMailingAt(m);
     const targets = m.contacts.map((id) => {
-        const c = state.contacts.find((c) => c.id === id);
-        return { c, block: D.mailingBlock(c, m) };
-      }),
+      const c = state.contacts.find((c) => c.id === id);
+      return { c, block: D.mailingBlock(c, m) };
+    }),
       blocked = targets.filter((t) => t.block).length;
     modal(
       "Revisar e-mail",
       `<p class="notice green">${esc(emailTiming(m))} · ${m.contacts.length - blocked} elegíveis · ${blocked} bloqueados</p><h3>${esc(m.subject)}</h3><div class="campaign-preview">${esc(m.body)}</div><p class="email-review-timing">${m.status === "paused" && m.activated && m.kind === "recurring" ? "Ao retomar, o próximo horário futuro da programação original será usado." : first.getTime() > Date.now() ? "Primeiro envio: " + date(first.toISOString()) + " às " + first.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "Primeiro envio após confirmar."}${m.endDate ? " Término: " + date(m.endDate) + "." : ""}</p><div class="review-recipient-list">${targets.map(({ c, block }) => `<div class="review-recipient"><b>${esc(c?.name || "Contato removido")}</b><small>${esc(c?.email || "Sem e-mail")} ${block ? " · " + esc(block) : ""}</small></div>`).join("")}</div><p class="notice">Envio simulado. A elegibilidade de cada destinatário é conferida em cada execução. ${m.kind === "recurring" ? "Contatos fora da cadência ou doadores suspensos não recebem recorrências." : ""}</p>`,
       button("Fechar", "close") +
-        button("Editar", "email-edit", id, "secondary") +
-        button(
-          m.status === "paused" ? "Confirmar retomada" : "Confirmar e ativar",
-          "email-activate-local",
-          "",
-          "",
-          "check",
-        ),
+      button("Editar", "email-edit", id, "secondary") +
+      button(
+        m.status === "paused" ? "Confirmar retomada" : "Confirmar e ativar",
+        "email-activate-local",
+        "",
+        "",
+        "check",
+      ),
       true,
     );
     $f("[data-action=email-activate-local]").onclick = (e) => {
@@ -821,7 +819,7 @@ export function createCRMController(model) {
       "Cancelar os próximos envios?",
       `<p>${esc(m.subject)}</p><p>O histórico será preservado. Para programar novamente, será necessário editar e revisar uma nova versão.</p>`,
       button("Voltar", "close") +
-        button("Confirmar cancelamento", "email-cancel-local"),
+      button("Confirmar cancelamento", "email-cancel-local"),
     );
     $f("[data-action=email-cancel-local]").onclick = (e) => {
       e.stopPropagation();
@@ -843,15 +841,15 @@ export function createCRMController(model) {
       "Detalhes do e-mail",
       `<h3>${esc(m.subject)}</h3><p>${badge(mailingStatus[m.status])} ${esc(emailTiming(m))}</p><div class="campaign-preview">${esc(m.body)}</div><p>Versão ${m.version} · Configurado por ${esc(m.updatedByName)} · ${m.contacts.length} destinatários selecionados.</p><p>Próximo envio: ${m.nextAt ? date(m.nextAt) + " · " + time(m.nextAt) : "—"}${m.endDate ? " · Término " + date(m.endDate) : ""}</p><h3>Execuções</h3>${runs.map((r) => `<div class="list-row"><div><p>${time(r.at)} · ${badge(automationStatus[r.status])}</p><small>Versão ${r.version} · ${r.results.filter((x) => x.status === "simulated").length} simulados · ${r.results.filter((x) => x.status === "blocked").length} bloqueados</small></div>${button("Ver execução", "email-run", r.id, "quiet small")}</div>`).join("") || empty("Ainda não houve execução.")}`,
       button("Fechar", "close") +
-        (m.status === "active"
-          ? button(
-              "Simular próximo envio agora",
-              "email-simulate",
-              id,
-              "secondary",
-              "mail",
-            )
-          : ""),
+      (m.status === "active"
+        ? button(
+          "Simular próximo envio agora",
+          "email-simulate",
+          id,
+          "secondary",
+          "mail",
+        )
+        : ""),
       true,
     );
   }
@@ -940,15 +938,15 @@ export function createCRMController(model) {
     D.ensureAutomations(state);
     const rule = draft ||
       state.automations.find((r) => r.id === id) || {
-        name: "",
-        event: "registered",
-        origin: "",
-        direction: "Inbound",
-        stage: "",
-        delayMinutes: 0,
-        subject: "",
-        body: "",
-      };
+      name: "",
+      event: "registered",
+      origin: "",
+      direction: "Inbound",
+      stage: "",
+      delayMinutes: 0,
+      subject: "",
+      body: "",
+    };
     formModal(
       id ? "Editar automação" : "Nova automação",
       `<div class="step-label">1 de 2 · Disparo e condições</div>${field("Nome *", "name", rule.name, "text", 'required maxlength="120"')}${selectField("Disparar quando", "event", Object.entries(D.AUTO_EVENTS), rule.event)}${selectField("Origem", "origin", D.ORIGINS, rule.origin, "Todas as origens")}${selectField("Classificação", "direction", ["Inbound", "Outbound"], rule.direction, "Inbound e Outbound")}${selectField(
@@ -1045,13 +1043,13 @@ export function createCRMController(model) {
     );
     const payment = previewContact && state.payments.find((p) => p.contactId === previewContact.id);
     const preview = previewContact
-      ? D.renderAutomationMessage(state, r, {stage: previewContact.stage, paymentId: payment?.id}, previewContact)
-      : {subject: r.subject, body: r.body};
+      ? D.renderAutomationMessage(state, r, { stage: previewContact.stage, paymentId: payment?.id }, previewContact)
+      : { subject: r.subject, body: r.body };
     modal(
       "Revisar automação",
       `<h3>${esc(r.name)}</h3><p class="notice green">${esc(D.AUTO_EVENTS[r.event])}<br>${esc(automationConditions(r))}<br>${automationTiming(r)}</p><small>Prévia da mensagem</small><h3 class="automation-subject">${esc(preview.subject)}</h3><div class="campaign-preview">${esc(preview.body)}</div><p class="automation-meta">A ativação vale para novos eventos. Cadastros e contribuições anteriores não disparam mensagens retroativas.</p>`,
       button("Voltar", "close") +
-        button("Ativar automação", "automation-activate", id, "", "check"),
+      button("Ativar automação", "automation-activate", id, "", "check"),
     );
     $f("[data-action=automation-activate]").onclick = (e) => {
       e.stopPropagation();
@@ -1074,15 +1072,15 @@ export function createCRMController(model) {
       "Execução de automação",
       `<h3>${esc(r.rule.name)}</h3><p class="automation-subject">${badge(automationStatus[r.status], r.status === "failed" || r.status === "blocked" ? "red" : "")}</p><dl class="details"><div><dt>Contato</dt><dd>${esc(r.contactName)}</dd></div><div><dt>Destinatário</dt><dd>${esc(r.recipient || "Sem e-mail")}</dd></div><div><dt>Evento</dt><dd>${esc(D.AUTO_EVENTS[r.event.type])} · ${time(r.event.at)}</dd></div><div><dt>Previsão</dt><dd>${time(r.dueAt)}</dd></div><div><dt>Configuração</dt><dd>${esc(r.rule.updatedByName)} · versão ${r.rule.version}</dd></div><div><dt>Execução</dt><dd>Sistema · ${r.attempts.length} tentativa(s)</dd></div></dl><p class="notice">${esc(r.detail)}</p><h3>${esc(r.subject || r.rule.subject)}</h3><div class="campaign-preview">${esc(r.body || r.rule.body)}</div><h3 class="automation-subject">Histórico</h3><div class="timeline">${r.transitions.map((t) => `<article class="event"><h3>${esc(automationStatus[t.status])}</h3><p>${esc(t.detail)}</p><small>${time(t.at)} · Sistema</small></article>`).join("")}</div>`,
       button("Fechar", "close") +
-        (state.contacts.some((c) => c.id === r.contactId)
-          ? button("Abrir ficha", "profile", r.contactId, "secondary")
-          : "") +
-        (r.status === "scheduled"
-          ? button("Cancelar envio", "automation-cancel", id, "secondary") +
-            button("Simular agora", "automation-now", id, "", "mail")
-          : r.status === "failed"
-            ? button("Tentar novamente", "automation-retry", id, "", "mail")
-            : ""),
+      (state.contacts.some((c) => c.id === r.contactId)
+        ? button("Abrir ficha", "profile", r.contactId, "secondary")
+        : "") +
+      (r.status === "scheduled"
+        ? button("Cancelar envio", "automation-cancel", id, "secondary") +
+        button("Simular agora", "automation-now", id, "", "mail")
+        : r.status === "failed"
+          ? button("Tentar novamente", "automation-retry", id, "", "mail")
+          : ""),
       true,
     );
   }
@@ -1205,19 +1203,19 @@ export function createCRMController(model) {
           ? "Acompanhe contribuições e cuide de quem sustenta nossas obras sociais."
           : "Pessoas e organizações que fazem parte da nossa rede de esperança.",
         button("Exportar", "export-contacts", "", "secondary", "download") +
-          button("Novo contato", "contact", "", "", "plus"),
+        button("Novo contato", "contact", "", "", "plus"),
       ) +
       (!isDonors
         ? `<div class="tabs">${[
-            ["all", "Todos os contatos"],
-            ["leads", "Potenciais doadores"],
-            ["donors", "Doadores"],
-          ]
-            .map(
-              ([v, l]) =>
-                `<button class="tab ${tab === v ? "active" : ""}" data-action="contact-tab" data-id="${v}">${l}</button>`,
-            )
-            .join("")}</div>`
+          ["all", "Todos os contatos"],
+          ["leads", "Potenciais doadores"],
+          ["donors", "Doadores"],
+        ]
+          .map(
+            ([v, l]) =>
+              `<button class="tab ${tab === v ? "active" : ""}" data-action="contact-tab" data-id="${v}">${l}</button>`,
+          )
+          .join("")}</div>`
         : "") +
       filtersHTML(
         select(
@@ -1229,18 +1227,17 @@ export function createCRMController(model) {
           "Todos os status",
         ),
       ) +
-      `<section class="panel contacts-panel">${selectionToolbar(cs)}${
-        cs.length
-          ? `<div class="table-wrap"><table><thead><tr><th class="checkbox-cell"><span class="sr-only">Selecionar destinatário</span></th><th>Relacionamento</th><th>Origem</th><th>${isDonors ? "Compromisso / recebido" : "Etapa / compromisso"}</th><th>Status</th><th>Responsável</th><th></th></tr></thead><tbody>${cs
-              .slice((contactPage - 1) * 10, contactPage * 10)
-              .map(
-                (c) =>
-                  `<tr class="${selectedContacts.has(c.id) ? "selected-row" : ""}"><td class="checkbox-cell"><input type="checkbox" data-action="select-contact" data-id="${c.id}" aria-label="Selecionar ${esc(c.name)} para enviar e-mail" ${selectedContacts.has(c.id) ? "checked" : ""} ${emailEligible(c) ? "" : `disabled title="${c.optOut ? "Contato descadastrado de e-mails" : "Sem e-mail válido"}"`}></td><td>${contactCell(c)}</td><td>${esc(c.origin)}<small style="display:block">${c.funnel}</small></td><td>${c.plan ? "Compromisso: " + money(c.plan.amount) + '<small style="display:block">' + c.plan.mode + " · Recebido: " + money(total(state.payments.filter((p) => p.contactId === c.id))) + "</small>" : esc(D.STAGES[c.stage])}</td><td>${statusBadge(c)} ${c.optOut ? badge("Descadastrado", "gray") : ""}</td><td>${esc(state.users.find((u) => u.id === c.owner)?.name || "—")}</td><td><button class="icon-button" data-action="profile" data-id="${c.id}" aria-label="Abrir ficha de ${esc(c.name)}">${icon("arrow")}</button></td></tr>`,
-              )
-              .join(
-                "",
-              )}</tbody></table></div><div class="flex between" style="padding:16px 22px;border-top:1px solid var(--line)"><small>${cs.length} relacionamentos · Página ${contactPage} de ${pages}</small><div class="flex"><button class="btn secondary small" data-action="prev" ${contactPage <= 1 ? "disabled" : ""}>Anterior</button><button class="btn secondary small" data-action="next" ${contactPage >= pages ? "disabled" : ""}>Próxima</button></div></div>`
-          : empty("Nenhum relacionamento encontrado para estes filtros.")
+      `<section class="panel contacts-panel">${selectionToolbar(cs)}${cs.length
+        ? `<div class="table-wrap"><table><thead><tr><th class="checkbox-cell"><span class="sr-only">Selecionar destinatário</span></th><th>Relacionamento</th><th>Origem</th><th>${isDonors ? "Compromisso / recebido" : "Etapa / compromisso"}</th><th>Status</th><th>Responsável</th><th></th></tr></thead><tbody>${cs
+          .slice((contactPage - 1) * 10, contactPage * 10)
+          .map(
+            (c) =>
+              `<tr class="${selectedContacts.has(c.id) ? "selected-row" : ""}"><td class="checkbox-cell"><input type="checkbox" data-action="select-contact" data-id="${c.id}" aria-label="Selecionar ${esc(c.name)} para enviar e-mail" ${selectedContacts.has(c.id) ? "checked" : ""} ${emailEligible(c) ? "" : `disabled title="${c.optOut ? "Contato descadastrado de e-mails" : "Sem e-mail válido"}"`}></td><td>${contactCell(c)}</td><td>${esc(c.origin)}<small style="display:block">${c.funnel}</small></td><td>${c.plan ? "Compromisso: " + money(c.plan.amount) + '<small style="display:block">' + c.plan.mode + " · Recebido: " + money(total(state.payments.filter((p) => p.contactId === c.id))) + "</small>" : esc(D.STAGES[c.stage])}</td><td>${statusBadge(c)} ${c.optOut ? badge("Descadastrado", "gray") : ""}</td><td>${esc(state.users.find((u) => u.id === c.owner)?.name || "—")}</td><td><button class="icon-button" data-action="profile" data-id="${c.id}" aria-label="Abrir ficha de ${esc(c.name)}">${icon("arrow")}</button></td></tr>`,
+          )
+          .join(
+            "",
+          )}</tbody></table></div><div class="flex between" style="padding:16px 22px;border-top:1px solid var(--line)"><small>${cs.length} relacionamentos · Página ${contactPage} de ${pages}</small><div class="flex"><button class="btn secondary small" data-action="prev" ${contactPage <= 1 ? "disabled" : ""}>Anterior</button><button class="btn secondary small" data-action="next" ${contactPage >= pages ? "disabled" : ""}>Próxima</button></div></div>`
+        : empty("Nenhum relacionamento encontrado para estes filtros.")
       }</section>`
     );
   }
@@ -1257,7 +1254,7 @@ export function createCRMController(model) {
         "Cultive novas conexões",
         "Organize a prospecção ativa e acompanhe as respostas da comunidade.",
         button("Nova campanha", "campaign", "", "secondary", "mail") +
-          button("Nova lista", "list", "", "", "plus"),
+        button("Nova lista", "list", "", "", "plus"),
       ) +
       `<div class="filters"><div class="search">${icon("search")}<input id="search" type="search" aria-label="Buscar listas" placeholder="Buscar uma lista…" value="${esc(filters.q)}"></div><span class="toolbar-end muted" style="font-size:11px">${state.lists.length} listas · ${state.campaigns.length} campanhas realizadas</span></div><div class="lists-grid">${ls.map((l) => `<article class="panel list-card"><div class="flex between"><span class="list-icon">${icon("users")}</span>${badge(l.category, "gold")}</div><h2>${esc(l.name)}</h2><p>${esc(l.description)}</p><footer><small>${l.contacts.length} contatos · ${l.contacts.filter((id) => !state.contacts.find((c) => c.id === id)?.optOut).length} elegíveis</small>${button("Abrir lista", "list-detail", l.id, "quiet", "arrow")}</footer></article>`).join("") || empty("Nenhuma lista encontrada.")}</div><section class="panel" style="margin-top:26px"><div class="panel-header"><div><h2>Campanhas de relacionamento</h2><p>Mensagens e destinatários registrados na linha do tempo</p></div>${icon("mail")}</div>${state.campaigns.length ? `<div class="table-wrap"><table><thead><tr><th>Assunto</th><th>Destinatários</th><th>Data</th><th></th></tr></thead><tbody>${state.campaigns.map((c) => `<tr><td>${esc(c.subject)}</td><td>${c.contacts.length} contatos</td><td>${time(c.at)}</td><td>${button("Ver mensagem", "campaign-detail", c.id, "quiet")}</td></tr>`).join("")}</tbody></table></div>` : empty("Sua próxima mensagem pode iniciar uma bonita história. Crie uma campanha para começar.")}</section>`
     );
@@ -1265,26 +1262,26 @@ export function createCRMController(model) {
   function paymentTable(ps, compact = false) {
     return ps.length
       ? `<div class="table-wrap"><table><thead><tr><th>Doador</th><th>Valor</th><th>${compact ? "Modalidade" : "Data / competência"}</th>${compact ? "" : "<th>Destinação</th>"}<th></th></tr></thead><tbody>${ps
-          .map((p) => {
-            const c = state.contacts.find((c) => c.id === p.contactId);
-            return `<tr><td>${contactCell(c)}</td><td style="color:var(--dark);font-weight:600">${money(p.amount)}</td><td>${compact ? badge(p.mode, p.mode === "Pontual" ? "gold" : "") : date(p.date) + `<small style="display:block">${monthLabel(p.period)} · ${p.mode}</small>`}</td>${compact ? "" : `<td>${esc(p.destination)}</td>`}<td><button class="icon-button" data-action="receipt" data-id="${p.id}" title="Ver recibo" aria-label="Ver recibo ${p.receipt}">${icon("file")}</button></td></tr>`;
-          })
-          .join("")}</tbody></table></div>`
+        .map((p) => {
+          const c = state.contacts.find((c) => c.id === p.contactId);
+          return `<tr><td>${contactCell(c)}</td><td style="color:var(--dark);font-weight:600">${money(p.amount)}</td><td>${compact ? badge(p.mode, p.mode === "Pontual" ? "gold" : "") : date(p.date) + `<small style="display:block">${monthLabel(p.period)} · ${p.mode}</small>`}</td>${compact ? "" : `<td>${esc(p.destination)}</td>`}<td><button class="icon-button" data-action="receipt" data-id="${p.id}" title="Ver recibo" aria-label="Ver recibo ${p.receipt}">${icon("file")}</button></td></tr>`;
+        })
+        .join("")}</tbody></table></div>`
       : empty("Nenhuma contribuição encontrada neste período.");
   }
   function finance() {
     const ps = state.payments
-        .filter(
-          (p) =>
-            (!filters.period || p.date.startsWith(filters.period)) &&
-            (!filters.mode || p.mode === filters.mode) &&
-            (!filters.q ||
-              state.contacts
-                .find((c) => c.id === p.contactId)
-                ?.name.toLowerCase()
-                .includes(filters.q.toLowerCase())),
-        )
-        .sort((a, b) => b.date.localeCompare(a.date)),
+      .filter(
+        (p) =>
+          (!filters.period || p.date.startsWith(filters.period)) &&
+          (!filters.mode || p.mode === filters.mode) &&
+          (!filters.q ||
+            state.contacts
+              .find((c) => c.id === p.contactId)
+              ?.name.toLowerCase()
+              .includes(filters.q.toLowerCase())),
+      )
+      .sort((a, b) => b.date.localeCompare(a.date)),
       pending = D.pending(state).filter(
         (p) =>
           (!filters.period || p.period === filters.period) &&
@@ -1297,7 +1294,7 @@ export function createCRMController(model) {
         "Contribuições que transformam",
         "Recebimentos via Pix, baixas mensais e cuidado com cada contribuição.",
         button("Exportar", "export-finance", "", "secondary", "download") +
-          button("Registrar doação", "payment", "", "", "plus"),
+        button("Registrar doação", "payment", "", "", "plus"),
       ) +
       `<section class="metrics">${metric("Recebido neste mês", money(total(paymentsFor())), "Doações financeiras confirmadas", "wallet")}${metric("Recorrentes neste mês", money(total(paymentsFor().filter((p) => p.mode === "Recorrente"))), "Compromissos que viram cuidado", "heart")}${metric("Pontuais neste mês", money(total(paymentsFor().filter((p) => p.mode === "Pontual"))), "Gestos de generosidade", "leaf")}${metric("Saldo pendente", money(total(D.pending(state))), D.pending(state).length + " competências abertas", "clock", true)}</section><div class="tabs"><button class="tab ${financeTab === "payments" ? "active" : ""}" data-action="finance-tab" data-id="payments">Recebimentos</button><button class="tab ${financeTab === "pending" ? "active" : ""}" data-action="finance-tab" data-id="pending">Pendências mensais ${badge(D.pending(state).length, "gold")}</button></div><div class="filters"><div class="search">${icon("search")}<input id="search" type="search" placeholder="Buscar um doador…" aria-label="Buscar doador" value="${esc(filters.q)}"></div><input type="month" name="period" value="${esc(filters.period)}" aria-label="Mês de recebimento ou competência">${financeTab === "payments" ? select("mode", ["Recorrente", "Pontual"], filters.mode, "Todas as modalidades") : select("status", [["overdue", "Somente em atraso"]], filters.status, "Todas as pendências")}${Object.values(filters).some(Boolean) ? button("Limpar filtros", "clear", "", "quiet") : ""}</div><section class="panel">${financeTab === "payments" ? paymentTable(ps) : pending.length ? `<div class="table-wrap"><table><thead><tr><th>Doador</th><th>Competência</th><th>Vencimento</th><th>Saldo a receber</th><th>Situação</th><th></th></tr></thead><tbody>${pending.map((p) => `<tr><td>${contactCell(state.contacts.find((c) => c.id === p.contactId))}</td><td>${monthLabel(p.period)}</td><td>${date(p.due)}</td><td>${money(p.amount)}</td><td>${badge(p.overdue ? "Em atraso" : "A vencer", p.overdue ? "red" : "gold")}</td><td>${button("Dar baixa", "payment-pending", p.contactId + "|" + p.period, "secondary small", "check")}</td></tr>`).join("")}</tbody></table></div>` : empty("Nenhuma pendência encontrada. Obrigado por cultivar esses laços.")}</section>`
     );
@@ -1309,7 +1306,7 @@ export function createCRMController(model) {
         "O cuidado também se mede",
         "Indicadores calculados a partir das contribuições e dos relacionamentos.",
         button("Exportar CSV", "export-report", "", "secondary", "download") +
-          button("Exportar PDF", "report-pdf", "", "secondary", "file"),
+        button("Exportar PDF", "report-pdf", "", "secondary", "file"),
       ) +
       `<div class="filters"><span class="filter-label">Período de análise</span><input type="month" name="period" value="${period}" aria-label="Período de análise">${select("mode", ["Recorrente", "Pontual"], filters.mode, "Todas as modalidades")}${select(
         "stage",
@@ -1326,28 +1323,28 @@ export function createCRMController(model) {
       )}</div></section><section class="panel"><div class="panel-header"><div><h2>Avanço dos contatos cadastrados no período</h2><p>Etapas atuais e histórico disponível; não representa conversão histórica fechada. Modalidade filtra somente recebimentos.</p></div></div><div class="panel-body">${D.STAGES.map(
         (stage, i) => {
           const reached = cs.filter(
-              (c) =>
-                c.stage >= i ||
-                c.history.some(
-                  (h) =>
-                    h.action === "Etapa alterada" &&
-                    h.details.startsWith(stage) &&
-                    D.month(h.at) <= period,
-                ),
-            ),
+            (c) =>
+              c.stage >= i ||
+              c.history.some(
+                (h) =>
+                  h.action === "Etapa alterada" &&
+                  h.details.startsWith(stage) &&
+                  D.month(h.at) <= period,
+              ),
+          ),
             converted = reached.filter((c) =>
               i === 3
                 ? c.plan && c.plan.since <= period
                 : c.stage > i ||
-                  (c.plan && c.plan.since <= period) ||
-                  c.history.some(
-                    (h) =>
-                      h.action === "Etapa alterada" &&
-                      D.month(h.at) <= period &&
-                      D.STAGES.slice(i + 1).some((t) =>
-                        h.details.startsWith(t),
-                      ),
-                  ),
+                (c.plan && c.plan.since <= period) ||
+                c.history.some(
+                  (h) =>
+                    h.action === "Etapa alterada" &&
+                    D.month(h.at) <= period &&
+                    D.STAGES.slice(i + 1).some((t) =>
+                      h.details.startsWith(t),
+                    ),
+                ),
             );
           return `<div class="funnel-row"><div class="info">${esc(stage)}<small style="display:block;margin-top:5px">${converted.length} de ${reached.length} contatos${i === 3 ? " tornaram-se doadores" : " avançaram"}</small></div><strong>${((converted.length / Math.max(1, reached.length)) * 100).toFixed(0)}%</strong></div>`;
         },
@@ -1379,16 +1376,15 @@ export function createCRMController(model) {
         "Uma história que fica registrada",
         "Rastreabilidade dos cadastros, relacionamentos e contribuições.",
       ) +
-      `<div class="filters"><div class="search">${icon("search")}<input id="search" type="search" aria-label="Buscar na auditoria" placeholder="Buscar ação ou responsável…" value="${esc(filters.q)}"></div></div><section class="panel">${
-        entries.length
-          ? `<div class="table-wrap"><table><thead><tr><th>Quando</th><th>Responsável</th><th>Ação</th><th>Detalhes</th></tr></thead><tbody>${entries
-              .slice(0, 100)
-              .map(
-                (e) =>
-                  `<tr><td>${time(e.at)}</td><td>${esc(e.actorName)}</td><td>${esc(e.action)}</td><td style="max-width:380px;white-space:normal">${esc(e.details)}</td></tr>`,
-              )
-              .join("")}</tbody></table></div>`
-          : empty("As ações da equipe aparecerão aqui.")
+      `<div class="filters"><div class="search">${icon("search")}<input id="search" type="search" aria-label="Buscar na auditoria" placeholder="Buscar ação ou responsável…" value="${esc(filters.q)}"></div></div><section class="panel">${entries.length
+        ? `<div class="table-wrap"><table><thead><tr><th>Quando</th><th>Responsável</th><th>Ação</th><th>Detalhes</th></tr></thead><tbody>${entries
+          .slice(0, 100)
+          .map(
+            (e) =>
+              `<tr><td>${time(e.at)}</td><td>${esc(e.actorName)}</td><td>${esc(e.action)}</td><td style="max-width:380px;white-space:normal">${esc(e.details)}</td></tr>`,
+          )
+          .join("")}</tbody></table></div>`
+        : empty("As ações da equipe aparecerão aqui.")
       }</section>`
     );
   }
@@ -1476,18 +1472,18 @@ export function createCRMController(model) {
       });
     $$(".filters select,.filters input[type=month]").forEach(
       (el) =>
-        (el.onchange = () => {
-          filters[el.name] = el.value;
-          contactPage = 1;
-          render();
-        }),
+      (el.onchange = () => {
+        filters[el.name] = el.value;
+        contactPage = 1;
+        render();
+      }),
     );
     $$(".card[draggable=true]").forEach(
       (el) =>
-        (el.ondragstart = (e) => {
-          e.dataTransfer.setData("text/plain", el.dataset.contact);
-          e.dataTransfer.effectAllowed = "move";
-        }),
+      (el.ondragstart = (e) => {
+        e.dataTransfer.setData("text/plain", el.dataset.contact);
+        e.dataTransfer.effectAllowed = "move";
+      }),
     );
     $$(".column[data-stage]").forEach((el) => {
       el.ondragover = (e) => {
@@ -1563,16 +1559,16 @@ export function createCRMController(model) {
     const existing = state.contacts.find((c) => c.id === id),
       c = draft ||
         existing || {
-          name: "",
-          email: "",
-          phone: "",
-          type: "PF",
-          document: "",
-          origin: "Indicação",
-          funnel: "Inbound",
-          stage: 0,
-          owner: user.id,
-        };
+        name: "",
+        email: "",
+        phone: "",
+        type: "PF",
+        document: "",
+        origin: "Indicação",
+        funnel: "Inbound",
+        stage: 0,
+        owner: user.id,
+      };
     formModal(
       existing ? "Editar relacionamento" : "Um novo relacionamento",
       `<div class="step-label">1 de 2 · Conhecer a pessoa</div><div class="form-grid">${field("Nome completo / razão social *", "name", c.name, "text", 'required maxlength="120"')}${selectField(
@@ -1606,14 +1602,14 @@ export function createCRMController(model) {
       doc.value =
         $f("[name=type]").value === "PF"
           ? n
-              .replace(/^(\d{3})(\d)/, "$1.$2")
-              .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
-              .replace(/(\d{3})(\d{2})$/, "$1-$2")
+            .replace(/^(\d{3})(\d)/, "$1.$2")
+            .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+            .replace(/(\d{3})(\d{2})$/, "$1-$2")
           : n
-              .replace(/^(\d{2})(\d)/, "$1.$2")
-              .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
-              .replace(/(\d{3})(\d{4})/, "$1/$2")
-              .replace(/(\d{4})(\d{2})$/, "$1-$2");
+            .replace(/^(\d{2})(\d)/, "$1.$2")
+            .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+            .replace(/(\d{3})(\d{4})/, "$1/$2")
+            .replace(/(\d{4})(\d{2})$/, "$1-$2");
     };
     $f("[name=type]").onchange = () => doc.oninput();
   }
@@ -1625,15 +1621,14 @@ export function createCRMController(model) {
         "stage",
         D.STAGES.map((s, i) => [i, s]),
         c.stage,
-      )}${
-        user.role === "Administrador"
-          ? selectField(
-              "Operador responsável",
-              "owner",
-              state.users.filter((u) => u.active).map((u) => [u.id, u.name]),
-              c.owner,
-            )
-          : ""
+      )}${user.role === "Administrador"
+        ? selectField(
+          "Operador responsável",
+          "owner",
+          state.users.filter((u) => u.active).map((u) => [u.id, u.name]),
+          c.owner,
+        )
+        : ""
       }</div>${button("Voltar aos dados", "contact-back", id, "quiet")}`,
       (d) => {
         const merged = {
@@ -1661,12 +1656,12 @@ export function createCRMController(model) {
               "Origem e direção alteradas",
               id,
               existing.origin +
-                " / " +
-                existing.funnel +
-                " → " +
-                merged.origin +
-                " / " +
-                merged.funnel,
+              " / " +
+              existing.funnel +
+              " → " +
+              merged.origin +
+              " / " +
+              merged.funnel,
             );
           Object.assign(existing, merged, { stage: oldStage });
           D.move(state, user, id, merged.stage);
@@ -1706,16 +1701,15 @@ export function createCRMController(model) {
     const ps = state.payments.filter((p) => p.contactId === id);
     modal(
       "Ficha de relacionamento",
-      `<div class="profile-hero">${avatar(c)}<div><h2>${esc(c.name)}</h2><p style="margin-top:7px">${statusBadge(c)} ${badge(c.type, "gold")}  ${c.optOut ? badge("Descadastrado de e-mails", "gray") : ""}</p></div></div><div class="profile-grid"><div><dl class="details"><div><dt>E-mail</dt><dd>${esc(c.email || "Não informado")}</dd></div><div><dt>Telefone</dt><dd>${esc(c.phone || "Não informado")}</dd></div><div><dt>CPF / CNPJ</dt><dd>${esc(c.document || "Não informado")}</dd></div><div><dt>Origem</dt><dd>${esc(c.origin)} · ${c.funnel}</dd></div><div><dt>Responsável</dt><dd>${esc(state.users.find((u) => u.id === c.owner)?.name || "—")}</dd></div><div><dt>Desde</dt><dd>${date(c.created)}</dd></div></dl><div class="notice green"><small>Etapa atual</small><p>${D.STAGES[c.stage]}</p>${D.outsideCadence(c) ? `<p>Etapa de perdas: ${esc(D.LOSS_STAGES[D.lossStage(c)])}</p>${c.cadenceExit.followUpDate ? `<p>Retomada agendada: ${date(c.cadenceExit.followUpDate)}</p>` : ""}<p><b>Fora da cadência</b> · ${esc(c.cadenceExit.reason)}</p><p>${esc(c.cadenceExit.note)}</p><p>Saída: ${date(c.cadenceExit.date)} · ${esc(c.cadenceExit.actorName)}</p><p>Última etapa: ${esc(D.STAGES[c.cadenceExit.stage])}</p>` : ""}${c.plan ? `<p style="margin-top:10px">Compromisso: <b>${money(c.plan.amount)}</b> · ${c.plan.mode}${c.plan.due ? " · Dia " + c.plan.due : ""}</p>` : ""}</div>${enrollmentInfo(c)}${intakeSummary(c)}${contactTasks(c)}<div class="profile-actions">${button("Editar", "contact", id, "secondary small", "edit")}${D.outsideCadence(c) ? button("Mover etapa de perdas", "loss-move", id, "secondary small") + button("Retomar cadência", "cadence-resume", id, "secondary small") : button("Registrar perda", "cadence-exit", id, "secondary small")}${!c.plan && !D.outsideCadence(c) ? button("Mover etapa", "move", id, "secondary small", "funnel") + button("Converter em doador", "convert", id, "small", "heart") : c.plan ? button("Registrar doação", "payment", id, "small", "plus") + button("Alterar status", "donor-status", id, "secondary small") : ""}${button("Registrar interação", "interaction", id, "secondary small", "plus")}${button("Registrar resposta", "response", id, "secondary small", "mail")}${c.plan ? button("Comprovante de adesão", "adherence", id, "quiet small", "file") : ""}${!c.optOut && c.email ? button("Enviar mensagem", "contact-mail", id, "quiet small", "mail") : ""}${user.role === "Administrador" ? button("Excluir contato", "delete-contact", id, "danger small") : ""}</div>${
-        ps.length
-          ? `<h3 style="margin:22px 0 8px">Contribuições · ${money(total(ps))}</h3>${ps
-              .slice(0, 4)
-              .map(
-                (p) =>
-                  `<div class="list-row"><div><p>${money(p.amount)}</p><small>${date(p.date)} · ${monthLabel(p.period)}</small></div><button class="icon-button right" data-action="receipt" data-id="${p.id}" aria-label="Ver recibo">${icon("file")}</button></div>`,
-              )
-              .join("")}`
-          : ""
+      `<div class="profile-hero">${avatar(c)}<div><h2>${esc(c.name)}</h2><p style="margin-top:7px">${statusBadge(c)} ${badge(c.type, "gold")}  ${c.optOut ? badge("Descadastrado de e-mails", "gray") : ""}</p></div></div><div class="profile-grid"><div><dl class="details"><div><dt>E-mail</dt><dd>${esc(c.email || "Não informado")}</dd></div><div><dt>Telefone</dt><dd>${esc(c.phone || "Não informado")}</dd></div><div><dt>CPF / CNPJ</dt><dd>${esc(c.document || "Não informado")}</dd></div><div><dt>Origem</dt><dd>${esc(c.origin)} · ${c.funnel}</dd></div><div><dt>Responsável</dt><dd>${esc(state.users.find((u) => u.id === c.owner)?.name || "—")}</dd></div><div><dt>Desde</dt><dd>${date(c.created)}</dd></div></dl><div class="notice green"><small>Etapa atual</small><p>${D.STAGES[c.stage]}</p>${D.outsideCadence(c) ? `<p>Etapa de perdas: ${esc(D.LOSS_STAGES[D.lossStage(c)])}</p>${c.cadenceExit.followUpDate ? `<p>Retomada agendada: ${date(c.cadenceExit.followUpDate)}</p>` : ""}<p><b>Fora da cadência</b> · ${esc(c.cadenceExit.reason)}</p><p>${esc(c.cadenceExit.note)}</p><p>Saída: ${date(c.cadenceExit.date)} · ${esc(c.cadenceExit.actorName)}</p><p>Última etapa: ${esc(D.STAGES[c.cadenceExit.stage])}</p>` : ""}${c.plan ? `<p style="margin-top:10px">Compromisso: <b>${money(c.plan.amount)}</b> · ${c.plan.mode}${c.plan.due ? " · Dia " + c.plan.due : ""}</p>` : ""}</div>${enrollmentInfo(c)}${intakeSummary(c)}${contactTasks(c)}<div class="profile-actions">${button("Editar", "contact", id, "secondary small", "edit")}${D.outsideCadence(c) ? button("Mover etapa de perdas", "loss-move", id, "secondary small") + button("Retomar cadência", "cadence-resume", id, "secondary small") : button("Registrar perda", "cadence-exit", id, "secondary small")}${!c.plan && !D.outsideCadence(c) ? button("Mover etapa", "move", id, "secondary small", "funnel") + button("Converter em doador", "convert", id, "small", "heart") : c.plan ? button("Registrar doação", "payment", id, "small", "plus") + button("Alterar status", "donor-status", id, "secondary small") : ""}${button("Registrar interação", "interaction", id, "secondary small", "plus")}${button("Registrar resposta", "response", id, "secondary small", "mail")}${c.plan ? button("Comprovante de adesão", "adherence", id, "quiet small", "file") : ""}${!c.optOut && c.email ? button("Enviar mensagem", "contact-mail", id, "quiet small", "mail") : ""}${user.role === "Administrador" ? button("Excluir contato", "delete-contact", id, "danger small") : ""}</div>${ps.length
+        ? `<h3 style="margin:22px 0 8px">Contribuições · ${money(total(ps))}</h3>${ps
+          .slice(0, 4)
+          .map(
+            (p) =>
+              `<div class="list-row"><div><p>${money(p.amount)}</p><small>${date(p.date)} · ${monthLabel(p.period)}</small></div><button class="icon-button right" data-action="receipt" data-id="${p.id}" aria-label="Ver recibo">${icon("file")}</button></div>`,
+          )
+          .join("")}`
+        : ""
       }</div><div><div class="flex between" style="margin-bottom:22px"><h3>Uma história de relacionamento</h3><small>${c.history.length} registros</small></div><div class="timeline">${c.history.map((e) => `<article class="event"><h3>${esc(e.action)}</h3><p>${esc(e.details)}</p><small>${time(e.at)} · ${esc(e.actorName)}</small></article>`).join("")}</div></div></div>`,
       "",
       true,
@@ -1774,7 +1768,7 @@ export function createCRMController(model) {
       "Comprovante de adesão",
       `<div class="receipt">${brand()}<div class="eyebrow">Cuidar, contribuir, transformar</div><h2>Compromisso de contribuição</h2><p>${esc(c.name)} · ${esc(c.email || c.phone)}</p><strong class="amount">${money(c.plan.amount)}</strong><dl class="details"><div><dt>Modalidade</dt><dd>${c.plan.mode}</dd></div><div><dt>Adesão</dt><dd>${monthLabel(c.plan.since)}</dd></div><div><dt>Vencimento</dt><dd>${c.plan.due ? "Todo dia " + c.plan.due : "Contribuição única"}</dd></div><div><dt>Situação</dt><dd>${c.plan.status}</dd></div></dl><p>Obrigado por caminhar com a Luz da Esperança.</p><small>Comprovante de adesão · Não representa confirmação de pagamento.</small></div>`,
       button("Fechar", "close") +
-        button("Imprimir / salvar PDF", "print", "", "", "download"),
+      button("Imprimir / salvar PDF", "print", "", "", "download"),
     );
   }
   function interactionForm(id) {
@@ -1937,8 +1931,8 @@ export function createCRMController(model) {
       "Recibo de contribuição",
       `<div class="receipt">${brand()}<div class="eyebrow">${p.receipt}</div><h2>Obrigado por espalhar esperança.</h2><p>Recebemos de <b>${esc(c.name)}</b> uma contribuição financeira para apoiar nossas obras sociais.</p><strong class="amount">${money(p.amount)}</strong><dl class="details"><div><dt>Data do pagamento</dt><dd>${date(p.date)}</dd></div><div><dt>Competência</dt><dd>${monthLabel(p.period)}</dd></div><div><dt>Modalidade</dt><dd>${p.mode}</dd></div><div><dt>Destinação</dt><dd>${esc(p.destination)}</dd></div><div><dt>Referência Pix</dt><dd>${esc(p.pix || "Comprovante anexo")}</dd></div><div><dt>Responsável pelo registro</dt><dd>${esc(p.actorName)} · ${time(p.at)}</dd></div></dl>${p.attachment ? button("Baixar comprovante · " + esc(p.attachment.name), "attachment", p.id, "secondary small", "download") : ""}<p>Centro Espírita e Obras Sociais Luz da Esperança<br>Parnaíba, PI</p></div>`,
       button("Fechar", "close") +
-        button("Enviar por e-mail", "receipt-email", id, "secondary", "mail") +
-        button("Imprimir / salvar PDF", "print", "", "", "download"),
+      button("Enviar por e-mail", "receipt-email", id, "secondary", "mail") +
+      button("Imprimir / salvar PDF", "print", "", "", "download"),
     );
   }
   function listForm(id = "") {
@@ -2013,15 +2007,15 @@ export function createCRMController(model) {
     D.ensureExtensions(state);
     const r = draft ||
       state.intakeRules.find((r) => r.id === id) || {
-        name: "",
-        origin: "Site",
-        direction: "Inbound",
-        stage: "",
-        owner: "",
-        listId: "",
-        taskText: "",
-        days: 1,
-      };
+      name: "",
+      origin: "Site",
+      direction: "Inbound",
+      stage: "",
+      owner: "",
+      listId: "",
+      taskText: "",
+      days: 1,
+    };
     formModal(
       "Regra de pós-cadastro",
       `<div class="step-label">1 de 2 · Origem e destino</div>${field("Nome da regra *", "name", r.name, "text", 'required maxlength="120"')}${selectField("Origem", "origin", D.ORIGINS, r.origin)}${selectField("Classificação", "funnel", ["Inbound", "Outbound"], r.direction)}${selectField(
@@ -2099,13 +2093,13 @@ export function createCRMController(model) {
           "Revisar envio do recibo",
           `<p><b>Para:</b> ${esc(d.recipient)}</p><h3>${esc(d.subject)}</h3><div class="campaign-preview">${esc(d.body)}</div><p>Recibo ${esc(snapshot.receipt)} · ${esc(snapshot.donor)} · ${money(snapshot.amount)} · ${date(snapshot.date)} · ${monthLabel(snapshot.period)} · ${esc(snapshot.mode)} · ${esc(snapshot.destination)}</p><p class="notice">Envio simulado de recibo, sem entrega real. O endereço informado não altera o cadastro.</p>`,
           button("Voltar", "receipt-back-local") +
-            button(
-              "Confirmar envio simulado",
-              "receipt-send-local",
-              "",
-              "",
-              "mail",
-            ),
+          button(
+            "Confirmar envio simulado",
+            "receipt-send-local",
+            "",
+            "",
+            "mail",
+          ),
         );
         $("[data-action=receipt-back-local]").onclick = (e) => {
           e.stopPropagation();
@@ -2143,13 +2137,13 @@ export function createCRMController(model) {
       "Exportar relatório em PDF",
       `<p class="print-help notice">Use Imprimir / salvar PDF e selecione Salvar como PDF no navegador.</p><article class="print-report">${brand()}<h1>Relatório administrativo</h1><p>Período: ${monthLabel(period)} · Modalidade: ${esc(filters.mode || "Todas")} · Etapa: ${filters.stage ? esc(D.STAGES[Number(filters.stage)]) : "Todas"}</p><p>Emitido em ${new Date().toLocaleString("pt-BR")} · ${ps.length} contribuições · Total ${money(total(ps))}</p>${doc.markup}</article>`,
       button("Fechar", "close") +
-        button(
-          "Imprimir / salvar PDF",
-          "report-print-local",
-          "",
-          "",
-          "download",
-        ),
+      button(
+        "Imprimir / salvar PDF",
+        "report-print-local",
+        "",
+        "",
+        "download",
+      ),
       true,
     );
     $("[data-action=report-print-local]").onclick = (e) => {
@@ -2162,12 +2156,12 @@ export function createCRMController(model) {
           "Impressão de relatório solicitada",
           null,
           period +
-            " · " +
-            (filters.mode || "Todas as modalidades") +
-            " · " +
-            (filters.stage
-              ? D.STAGES[Number(filters.stage)]
-              : "Todas as etapas"),
+          " · " +
+          (filters.mode || "Todas as modalidades") +
+          " · " +
+          (filters.stage
+            ? D.STAGES[Number(filters.stage)]
+            : "Todas as etapas"),
         );
         save();
         window.print();
@@ -2196,7 +2190,7 @@ export function createCRMController(model) {
         ...ps.map((p) => [
           p.receipt,
           state.contacts.find((c) => c.id === p.contactId)?.name ||
-            "Contato não encontrado",
+          "Contato não encontrado",
           p.amount,
           p.date,
           p.period,
@@ -2213,10 +2207,10 @@ export function createCRMController(model) {
       "Relatório CSV exportado",
       null,
       period +
-        " · " +
-        (filters.mode || "Todas as modalidades") +
-        " · " +
-        (filters.stage ? D.STAGES[Number(filters.stage)] : "Todas as etapas"),
+      " · " +
+      (filters.mode || "Todas as modalidades") +
+      " · " +
+      (filters.stage ? D.STAGES[Number(filters.stage)] : "Todas as etapas"),
     );
     save();
     toast("Relatório CSV exportado.");
@@ -2281,10 +2275,10 @@ export function createCRMController(model) {
             .join("") || empty("Nenhum contato atende aos filtros.");
         results.findAll("input").forEach(
           (el) =>
-            (el.onchange = () => {
-              el.checked ? chosen.add(el.value) : chosen.delete(el.value);
-              summary();
-            }),
+          (el.onchange = () => {
+            el.checked ? chosen.add(el.value) : chosen.delete(el.value);
+            summary();
+          }),
         );
         summary();
       } catch (e) {
@@ -2353,10 +2347,10 @@ export function createCRMController(model) {
           "Planilha muito grande. Importe até 20 MB de conteúdo descompactado.",
         );
       const start =
-          offset +
-          30 +
-          v.getUint16(offset + 26, true) +
-          v.getUint16(offset + 28, true),
+        offset +
+        30 +
+        v.getUint16(offset + 26, true) +
+        v.getUint16(offset + 28, true),
         compressed = bytes.slice(start, start + size);
       let out;
       if (method === 0) out = compressed;
@@ -2380,14 +2374,14 @@ export function createCRMController(model) {
     const parser = new DOMParser(),
       strings = files["xl/sharedStrings.xml"]
         ? [
-            ...parser
-              .parseFromString(files["xl/sharedStrings.xml"], "application/xml")
-              .getElementsByTagName("si"),
-          ].map((si) =>
-            [...si.getElementsByTagName("t")]
-              .map((t) => t.textContent)
-              .join(""),
-          )
+          ...parser
+            .parseFromString(files["xl/sharedStrings.xml"], "application/xml")
+            .getElementsByTagName("si"),
+        ].map((si) =>
+          [...si.getElementsByTagName("t")]
+            .map((t) => t.textContent)
+            .join(""),
+        )
         : [];
     const sheet = Object.keys(files)
       .filter((n) => n.includes("worksheets/"))
@@ -2411,8 +2405,8 @@ export function createCRMController(model) {
             ? strings[Number(val)] || ""
             : type === "inlineStr"
               ? [...c.getElementsByTagName("t")]
-                  .map((t) => t.textContent)
-                  .join("")
+                .map((t) => t.textContent)
+                .join("")
               : val;
       }
       return result;
@@ -2441,11 +2435,11 @@ export function createCRMController(model) {
         listDetail(id);
         toast(
           r.imported +
-            " contatos importados · " +
-            r.duplicates +
-            " duplicados · " +
-            r.invalid +
-            " inválidos",
+          " contatos importados · " +
+          r.duplicates +
+          " duplicados · " +
+          r.invalid +
+          " inválidos",
         );
       },
       "Importar contatos",
@@ -2456,15 +2450,14 @@ export function createCRMController(model) {
       throw Error("Crie uma lista de contatos antes da campanha.");
     formModal(
       "Uma mensagem pode aproximar",
-      `${
-        contactId
-          ? `<div class="notice green">Para ${esc(state.contacts.find((c) => c.id === contactId).name)}</div>`
-          : selectField(
-              "Lista de destinatários *",
-              "listId",
-              state.lists.map((l) => [l.id, l.name]),
-              listId || state.lists[0]?.id,
-            )
+      `${contactId
+        ? `<div class="notice green">Para ${esc(state.contacts.find((c) => c.id === contactId).name)}</div>`
+        : selectField(
+          "Lista de destinatários *",
+          "listId",
+          state.lists.map((l) => [l.id, l.name]),
+          listId || state.lists[0]?.id,
+        )
       }${field("Assunto da mensagem *", "subject", "", "text", 'required maxlength="180"')}<div class="field"><label for="f-body">Mensagem *</label><textarea id="f-body" name="body" required maxlength="10000" rows="6" placeholder="Olá! Queremos compartilhar um pouco do que estamos construindo juntos…"></textarea></div><small>Contatos descadastrados ou sem e-mail ficam fora do envio.</small>`,
       (d) => {
         const ids = contactId
@@ -2480,7 +2473,7 @@ export function createCRMController(model) {
           "Revise a mensagem",
           `<div class="notice green">${eligible.length} destinatário(s) elegível(is) · ${ids.length - eligible.length} excluído(s)</div><h3 style="margin-bottom:15px">${esc(d.subject)}</h3><div class="campaign-preview">${esc(d.body)}</div>`,
           button("Voltar", "campaign-back") +
-            button("Confirmar envio", "campaign-send", "", "", "mail"),
+          button("Confirmar envio", "campaign-send", "", "", "mail"),
         );
         $("[data-action=campaign-send]").onclick = (e) => {
           e.stopPropagation();
@@ -2613,7 +2606,7 @@ export function createCRMController(model) {
             `<div class="list-row"><div><h3>${esc(t.text)}</h3><small>${t.due ? "Prazo: " + date(t.due) : date(t.at)} · ${esc(state.users.find((u) => u.id === t.owner)?.name || "Equipe")} · ${t.intakeRunId ? "Acompanhamento" : "Reengajamento"}</small></div><div class="right flex">${button("Abrir contato", "profile", t.contactId, "secondary small")}<button class="icon-button" data-action="task-done" data-id="${t.id}" aria-label="Concluir ação">${icon("check")}</button></div></div>`,
         )
         .join("") ||
-        empty("Nenhuma ação pendente. Os laços estão sendo bem cuidados."),
+      empty("Nenhuma ação pendente. Os laços estão sendo bem cuidados."),
     );
   }
   function download(name, data, type = "text/csv;charset=utf-8") {
@@ -2716,7 +2709,7 @@ export function createCRMController(model) {
         (!filters.mode || p.mode === filters.mode) &&
         (!filters.stage ||
           String(state.contacts.find((c) => c.id === p.contactId)?.stage) ===
-            filters.stage) &&
+          filters.stage) &&
         (!filters.q ||
           state.contacts
             .find((c) => c.id === p.contactId)
@@ -3129,10 +3122,12 @@ export function createCRMController(model) {
         case "delete-contact": {
           admin();
           const c = state.contacts.find((c) => c.id === id);
-          if (state.payments.some((p) => p.contactId === id)) {
+          if (!c) throw Error("Contato não encontrado.");
+          const check = canDeleteContact(state, id);
+          if (!check.allowed) {
             modal(
               "Uma história que precisa ser preservada",
-              "<p>Este doador possui histórico financeiro e seu cadastro não pode ser excluído. Para encerrar a recorrência, altere o status para Cancelado.</p>",
+              `<p>${esc(check.reason)}</p>`,
               button("Voltar à ficha", "profile", id),
             );
             break;
@@ -3141,21 +3136,13 @@ export function createCRMController(model) {
             "Excluir este relacionamento?",
             `<p>O cadastro de <b>${esc(c.name)}</b> será removido. Esta ação requer confirmação.</p>`,
             button("Manter cadastro", "profile", id) +
-              button("Confirmar exclusão", "confirm-delete", id, "danger"),
+            button("Confirmar exclusão", "confirm-delete", id, "danger"),
           );
           break;
         }
         case "confirm-delete": {
           admin();
-          if (state.payments.some((p) => p.contactId === id))
-            throw Error("Este contato possui histórico financeiro.");
-          const c = state.contacts.find((c) => c.id === id);
-          D.audit(state, user, "Contato excluído", null, c.name);
-          state.contacts = state.contacts.filter((c) => c.id !== id);
-          state.lists.forEach(
-            (l) => (l.contacts = l.contacts.filter((x) => x !== id)),
-          );
-          state.tasks = state.tasks.filter((t) => t.contactId !== id);
+          deleteContact(state, user, id);
           save();
           closeModal();
           render();
@@ -3244,7 +3231,7 @@ export function createCRMController(model) {
     try {
       if (!localStorage.getItem(THEME_KEY))
         applyTheme(e.matches ? "dark" : "light");
-    } catch {}
+    } catch { }
   });
   async function init() {
     try {

@@ -1,0 +1,5 @@
+# Estes arquivos fazem parte do contrato de paridade byte a byte
+# (source-manifest.json): o SHA-256 considera as quebras de linha CRLF originais.
+# O Git guarda LF no índice, mas materializa CRLF no checkout.
+src/app/globals.css              text eol=crlf
+tests/fixtures/prototype-app.cjs text eol=crlf

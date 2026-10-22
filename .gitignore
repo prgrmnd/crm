@@ -5,4 +5,4 @@ test-results/
 .env*
 !.env.example
 src/generated/prisma/
-
+*.tsbuildinfo

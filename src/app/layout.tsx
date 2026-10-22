@@ -12,7 +12,11 @@ export const viewport = {
 
 const initialTheme = `(()=>{let theme;try{theme=localStorage.getItem('luz-crm-theme')}catch{}if(!['light','dark'].includes(theme))theme=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.dataset.theme=theme;if(theme==='dark')document.querySelector('meta[name="theme-color"]').content='#151c18'})();`;
 
-export default function RootLayout({ children }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <head>

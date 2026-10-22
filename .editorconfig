@@ -1,0 +1,10 @@
+root = true
+
+# Arquivos imutáveis do inventário: o SHA-256 considera as quebras CRLF originais.
+[src/app/globals.css]
+end_of_line = crlf
+trim_trailing_whitespace = false
+
+[tests/fixtures/prototype-app.cjs]
+end_of_line = crlf
+trim_trailing_whitespace = false

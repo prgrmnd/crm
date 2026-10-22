@@ -10,7 +10,7 @@
     "dev": "next dev --hostname 127.0.0.1",
     "build": "next build",
     "start": "next start --hostname 127.0.0.1",
-    "test": "node --test tests/*.test.cjs tests/*.test.js",
+    "test": "node scripts/test-with-postgres.cjs",
     "test:browser": "node tests/browser-parity.mjs",
     "test:visual": "node tests/visual-parity.mjs",
     "db:generate": "prisma generate",
@@ -36,5 +36,9 @@
     "playwright": "1.64.1",
     "prettier": "3.9.10",
     "prisma": "7.10.0"
+  },
+  "allowScripts": {
+    "@prisma/engines@7.10.0": true,
+    "prisma@7.10.0": true
   }
 }

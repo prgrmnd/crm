@@ -65,6 +65,8 @@ RELATORIO-PARIDADE.md    correspondência e resultados de validação
 
 ## Verificação
 
+`npm test` usa Docker Compose para iniciar um PostgreSQL 16 temporário em `127.0.0.1:55432`, aplica todas as migrations versionadas com `prisma migrate deploy`, executa a suite (incluindo os testes de integração) e remove container e volume temporário ao terminar. É necessário ter Docker Desktop ativo. O banco `crm_test` é descartável e não usa nem altera a `DATABASE_URL` do ambiente de desenvolvimento. Novos testes de integração devem usar `testWithDatabase` de `tests/helpers/postgres-test.cjs`; cada teste roda em uma transação que é desfeita ao final.
+
 ```powershell
 npm.cmd test
 npm.cmd run build

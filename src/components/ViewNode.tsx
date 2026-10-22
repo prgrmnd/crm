@@ -2,7 +2,7 @@
 
 import { createElement, useCallback } from "react";
 
-const attributes = {
+const attributes: Record<string, string> = {
   class: "className",
   for: "htmlFor",
   tabindex: "tabIndex",
@@ -26,7 +26,7 @@ const boolean = new Set([
   "readOnly",
   "autoFocus",
 ]);
-const eventNames = {
+const eventNames: Record<string, string> = {
   click: "onClick",
   input: "onInput",
   change: "onChange",
@@ -39,33 +39,33 @@ const eventNames = {
   keydown: "onKeyDown",
 };
 
-export function styleObject(css) {
+export function styleObject(css: string): Record<string, string> {
   return Object.fromEntries(
     css
       .split(";")
       .filter(Boolean)
-      .map((part) => {
+      .map((part: string) => {
         const colon = part.indexOf(":");
         const key = part.slice(0, colon).trim();
         return [
           key.startsWith("--")
             ? key
-            : key.replace(/-([a-z])/g, (_, c) => c.toUpperCase()),
+            : key.replace(/-([a-z])/g, (_: string, c: string) => c.toUpperCase()),
           part.slice(colon + 1).trim(),
         ];
       }),
   );
 }
 
-export function ViewNode({ node, model }) {
+export function ViewNode({ node, model }: { node: any; model: any }) {
   const ref = useCallback(
-    (element) => model.mount(node, element),
+    (element: any) => model.mount(node, element),
     [model, node],
   );
   if (node.raw.type === "text") return node.raw.data;
   if (!node.tag) return null;
-  const props = { ref };
-  for (const [name, value] of Object.entries(node.attributes)) {
+  const props: Record<string, any> = { ref };
+  for (const [name, value] of Object.entries(node.attributes as Record<string, any>)) {
     if (["value", "checked", "selected", "open"].includes(name)) continue;
     const property = attributes[name] || name;
     props[property] =
@@ -76,18 +76,18 @@ export function ViewNode({ node, model }) {
           : value;
   }
   for (const [type, prop] of Object.entries(eventNames)) {
-    props[prop] = (event) => {
+    props[prop] = (event: any) => {
       // React owns event registration. Bubbling through the presentation state
       // preserves the original ordering of local handlers and action dispatch.
       event.stopPropagation();
       model.dispatch(node, type, event);
     };
   }
-  props.onFocus = (event) => {
+  props.onFocus = (event: any) => {
     if (event.target === event.currentTarget) model.view.activeElement = node;
   };
   if (node.tag === "dialog") {
-    props.onCancel = (event) => {
+    props.onCancel = (event: any) => {
       event.preventDefault();
       model.modal.close();
     };
@@ -101,7 +101,7 @@ export function ViewNode({ node, model }) {
   const children =
     node.tag === "textarea"
       ? undefined
-      : node.children.map((child) => (
+      : node.children.map((child: any) => (
           <ViewNode key={child.key} node={child} model={model} />
         ));
   if (

@@ -1,0 +1,3 @@
+# Cópias byte a byte do inventário (source-manifest.json); não formatar.
+src/app/globals.css
+tests/fixtures/prototype-app.cjs

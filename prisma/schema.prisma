@@ -25,23 +25,24 @@ model Instituicao {
 }
 
 model Usuario {
-  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  criadoEm        DateTime         @default(now()) @map("criado_em") @db.Timestamptz(6)
-  nome            String           @db.VarChar(100)
+  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm          DateTime           @default(now()) @map("criado_em") @db.Timestamptz(6)
+  nome              String             @db.VarChar(100)
   // Unicidade normalizada garantida pelo índice usuarios_email_normalizado_unico (lower(trim(email))).
-  email           String           @db.VarChar(254)
+  email             String             @db.VarChar(254)
   // String PHC argon2id; a migration rejeita qualquer outro formato.
-  senhaHash       String           @map("senha_hash")
-  perfil          String           @db.VarChar(20)
-  ativo           Boolean          @default(true)
-  senhaAlteradaEm DateTime         @default(now()) @map("senha_alterada_em") @db.Timestamptz(6)
-  criadoPorId     String?          @map("criado_por") @db.Uuid
-  atualizadoEm    DateTime         @default(now()) @map("atualizado_em") @db.Timestamptz(6)
-  versao          Int              @default(1)
-  criadoPor       Usuario?         @relation("UsuarioCriadoPor", fields: [criadoPorId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "usuarios_criado_por_fkey")
-  usuariosCriados Usuario[]        @relation("UsuarioCriadoPor")
-  sessoes         Sessao[]
-  tentativasLogin TentativaLogin[]
+  senhaHash         String             @map("senha_hash")
+  perfil            String             @db.VarChar(20)
+  ativo             Boolean            @default(true)
+  senhaAlteradaEm   DateTime           @default(now()) @map("senha_alterada_em") @db.Timestamptz(6)
+  criadoPorId       String?            @map("criado_por") @db.Uuid
+  atualizadoEm      DateTime           @default(now()) @map("atualizado_em") @db.Timestamptz(6)
+  versao            Int                @default(1)
+  criadoPor         Usuario?           @relation("UsuarioCriadoPor", fields: [criadoPorId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "usuarios_criado_por_fkey")
+  usuariosCriados   Usuario[]          @relation("UsuarioCriadoPor")
+  sessoes           Sessao[]
+  tentativasLogin   TentativaLogin[]
+  tokensRecuperacao TokenRecuperacao[]
 
   @@index([criadoPorId], map: "usuarios_criado_por_idx")
   @@map("usuarios")
@@ -80,4 +81,21 @@ model TentativaLogin {
   @@index([ip, criadoEm], map: "tentativas_login_ip_criado_em_idx")
   @@index([usuarioId], map: "tentativas_login_usuario_id_idx")
   @@map("tentativas_login")
+}
+
+model TokenRecuperacao {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm     DateTime  @default(now()) @map("criado_em") @db.Timestamptz(6)
+  usuarioId    String    @map("usuario_id") @db.Uuid
+  // SHA-256 hexadecimal do token do link; nunca o token bruto.
+  tokenHash    String    @unique(map: "tokens_recuperacao_token_hash_unico") @map("token_hash")
+  // No máximo 15 minutos após criado_em (CHECK na migration).
+  expiraEm     DateTime  @default(dbgenerated("(CURRENT_TIMESTAMP + '00:15:00'::interval)")) @map("expira_em") @db.Timestamptz(6)
+  consumidoEm  DateTime? @map("consumido_em") @db.Timestamptz(6)
+  invalidadoEm DateTime? @map("invalidado_em") @db.Timestamptz(6)
+  usuario      Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "tokens_recuperacao_usuario_id_fkey")
+
+  // O índice único parcial tokens_recuperacao_um_ativo_por_usuario fica só na migration (Prisma não modela índice parcial).
+  @@index([usuarioId, expiraEm], map: "tokens_recuperacao_usuario_expira_em_idx")
+  @@map("tokens_recuperacao")
 }

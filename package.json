@@ -10,7 +10,7 @@
     "dev": "next dev --hostname 127.0.0.1",
     "build": "next build",
     "start": "next start --hostname 127.0.0.1",
-    "test": "node --experimental-strip-types --import ./tests/test-setup.mjs --test tests/*.test.cjs tests/*.test.js tests/*.test.ts",
+    "test": "node scripts/test-with-postgres.cjs",
     "test:browser": "node tests/browser-parity.mjs",
     "test:visual": "node tests/visual-parity.mjs",
     "db:generate": "prisma generate",

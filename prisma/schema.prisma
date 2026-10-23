@@ -23,3 +23,22 @@ model Instituicao {
 
   @@map("instituicoes")
 }
+
+model EventoAuditoria {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
+  atorTipo     String   @map("ator_tipo") @db.VarChar(10)
+  atorId       String?  @map("ator_id") @db.Uuid
+  contatoId    String?  @map("contato_id") @db.Uuid
+  acao         String   @db.VarChar(100)
+  entidadeTipo String   @map("entidade_tipo") @db.VarChar(80)
+  entidadeId   String?  @map("entidade_id") @db.Uuid
+  antes        Json?    @db.JsonB
+  depois       Json?    @db.JsonB
+  motivo       String?  @db.Text
+  correlacaoId String   @map("correlacao_id") @db.Uuid
+
+  @@index([contatoId, criadoEm(sort: Desc)], map: "eventos_auditoria_contato_timeline_idx")
+  @@index([correlacaoId], map: "eventos_auditoria_correlacao_idx")
+  @@map("eventos_auditoria")
+}

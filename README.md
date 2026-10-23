@@ -27,6 +27,14 @@ npm.cmd run db:migrate
 
 Abra `http://127.0.0.1:3000`. Para executar junto com o protótipo, use `npm.cmd run dev -- --port 3001`.
 
+### Cadastro central de contatos (PB-057)
+
+O modelo `Contato` cria a tabela `contatos` com FKs para origens, etapas de captação e usuários (responsável e autor), preservando as referências com `RESTRICT`. A migration depende das tabelas de acesso e dos domínios dos funis já versionados.
+
+O banco normaliza e-mail com `lower(trim(email))`; e-mail, telefone e documento vazios viram `NULL`. É obrigatório informar ao menos e-mail ou telefone. Telefone deve conter 10 ou 11 dígitos com DDD; CPF/CNPJ deve ser enviado somente com dígitos e é validado por tamanho, tipo PF/PJ e dígitos verificadores. E-mail e documento são únicos inclusive em contatos excluídos logicamente. Site e Instagram aceitam somente classificação `inbound`.
+
+`data_cadastro` é obrigatória e permite preservar datas de migração. `atualizado_em` é mantido por trigger; `versao` começa em 1 e deve ser usada pelo consumidor em atualizações condicionais com incremento atômico para controle de concorrência. A tabela oferece `excluido_em`; o bloqueio de exclusão por histórico financeiro pertence ao fluxo PB-009. Esta entrega cria a estrutura de banco, sem migrar o estado local do frontend. A FK de auditoria para contatos será adicionada em migration posterior, após integração da PB-070.
+
 Produção:
 
 ```powershell

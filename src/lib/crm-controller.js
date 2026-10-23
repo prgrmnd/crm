@@ -2561,41 +2561,43 @@ export function createCRMController(model) {
     );
   }
   function recover() {
-    formModal(
-      "Vamos recuperar seu acesso",
-      `<p class="muted" style="margin-bottom:20px">Informe o e-mail cadastrado para receber as instruções.</p>${field("E-mail de recuperação", "email", "", "email", "required")}`,
-      (d) => {
-        const u = state.users.find(
-          (u) =>
-            u.email.toLowerCase() === d.email.trim().toLowerCase() && u.active,
-        );
-        if (!u) {
-          modal(
-            "Confira sua caixa de entrada",
-            "<p>Se o e-mail estiver cadastrado, você receberá as instruções de recuperação.</p>",
-            button("Voltar ao acesso", "close"),
-          );
-          return;
-        }
+  formModal(
+    "Vamos recuperar seu acesso",
+    `<p class="muted" style="margin-bottom:20px">Informe o e-mail cadastrado para receber as instruções.</p>
+    ${field("E-mail de recuperação", "email", "", "email", "required")}`,
+    async (d) => {
+      const u = state.users.find(
+        (u) => u.email.toLowerCase() === d.email.trim().toLowerCase() && u.active
+      );
+
+      if (u) {
         const token = D.uid();
+        
         state.resets.push({
-          token,
+          token: token,
           userId: u.id,
           expires: Date.now() + 15 * 60 * 1000,
           used: false,
         });
+        
         save();
-        modal(
-          "Instruções de recuperação",
-          `<div class="notice green">As instruções foram preparadas para ${esc(u.email)}.</div><p style="margin-bottom:16px">No sistema, a entrega do e-mail é simulada. Use o link abaixo para redefinir a senha.</p><div class="campaign-preview">Olá, ${esc(u.name.split(" ")[0])}!<br>Você solicitou uma nova senha. Este link é válido por 15 minutos.</div><a class="btn" style="margin-top:20px" href="#redefinir=${token}" data-action="reset-link">Criar nova senha ${icon("arrow")}</a>`,
-          button("Fechar", "close"),
-        );
-      },
-      "Enviar instruções",
-      false,
-      true,
-    );
-  }
+
+        console.log(`[SIMULAÇÃO DE E-MAIL] Recuperação solicitada.
+        Para: ${u.email}
+        Link: http://localhost:3000/#redefinir=${token}`);
+      }
+
+      modal(
+        "Confira sua caixa de entrada",
+        "<p>Se o e-mail estiver cadastrado, você receberá as instruções de recuperação com um link válido por 15 minutos.</p>",
+        button("Voltar ao acesso", "close")
+      );
+    },
+    "Enviar instruções",
+    false,
+    true
+  );
+}
   function tasks() {
     modal(
       "Cultivar nossos relacionamentos",
@@ -2603,7 +2605,7 @@ export function createCRMController(model) {
         .filter((t) => !t.done)
         .map(
           (t) =>
-            `<div class="list-row"><div><h3>${esc(t.text)}</h3><small>${t.due ? "Prazo: " + date(t.due) : date(t.at)} · ${esc(state.users.find((u) => u.id === t.owner)?.name || "Equipe")} · ${t.intakeRunId ? "Acompanhamento" : "Reengajamento"}</small></div><div class="right flex">${button("Abrir contato", "profile", t.contactId, "secondary small")}<button class="icon-button" data-action="task-done" data-id="${t.id}" aria-label="Concluir ação">${icon("check")}</button></div></div>`,
+            `<div class="list-row"><div><h3>${esc(t.text)}</h3><small>${t.due ? "Prazo: " + darecoverte(t.due) : date(t.at)} · ${esc(state.users.find((u) => u.id === t.owner)?.name || "Equipe")} · ${t.intakeRunId ? "Acompanhamento" : "Reengajamento"}</small></div><div class="right flex">${button("Abrir contato", "profile", t.contactId, "secondary small")}<button class="icon-button" data-action="task-done" data-id="${t.id}" aria-label="Concluir ação">${icon("check")}</button></div></div>`,
         )
         .join("") ||
       empty("Nenhuma ação pendente. Os laços estão sendo bem cuidados."),

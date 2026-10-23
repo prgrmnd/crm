@@ -3,7 +3,7 @@ import { getPrismaClient } from "@/lib/prisma.ts";
 const sensitiveKey =
   /(senha|password|credential|credencial|token|secret|segredo|salt|hash|authorization|cookie)/i;
 
-type Snapshot = Record<string, unknown> | null;
+type Snapshot = object | null;
 
 export interface AuditEventInput {
   actorType: "usuario" | "sistema";

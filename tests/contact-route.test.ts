@@ -6,10 +6,11 @@ import { DELETE } from '../src/app/api/contacts/[id]/route.ts';
 import { getPrismaClient } from '../src/lib/prisma.ts';
 import type { NextRequest } from 'next/server';
 import D from './fixtures/seed.cjs';
+import type { CRMState } from '../src/types/crm.ts';
 
 describe('DELETE /api/contacts/[id] route', () => {
   test('returns 409 Conflict when contact has financial history', async () => {
-    const state = D.seed();
+    const state = D.seed() as CRMState;
     const donor = state.contacts.find((c: { id: string }) => c.id === 'contact-0');
     assert.ok(donor, 'donor contact should exist');
 
@@ -28,7 +29,7 @@ describe('DELETE /api/contacts/[id] route', () => {
   });
 
   test('persists sanitized audit event with the request correlation id', async () => {
-    const state = D.seed();
+    const state = D.seed() as CRMState;
     const contact = state.contacts.find((c: { id: string }) => c.id === 'contact-8');
     assert.ok(contact, 'lead contact should exist');
     contact.id = randomUUID();

@@ -7,6 +7,49 @@ datasource db {
   provider = "postgresql"
 }
 
+model Origem {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm          DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
+  codigo            String   @unique(map: "origens_codigo_unico") @db.VarChar(30)
+  nome              String   @db.VarChar(80)
+  // inbound para Site/Instagram; nulo permite seleção manual.
+  classificacaoFixa String?  @map("classificacao_fixa") @db.VarChar(10)
+  ativo             Boolean  @default(true)
+
+  @@map("origens")
+}
+
+model EtapaCaptacao {
+  id       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
+  codigo   String   @unique(map: "etapas_captacao_codigo_unico") @db.VarChar(40)
+  nome     String   @db.VarChar(120)
+  ordem    Int      @unique(map: "etapas_captacao_ordem_unica") @db.SmallInt
+
+  @@map("etapas_captacao")
+}
+
+model EtapaPerda {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm         DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
+  codigo           String   @unique(map: "etapas_perda_codigo_unico") @db.VarChar(40)
+  nome             String   @db.VarChar(120)
+  ordem            Int      @unique(map: "etapas_perda_ordem_unica") @db.SmallInt
+  exigeAgendamento Boolean  @default(false) @map("exige_agendamento")
+
+  @@map("etapas_perda")
+}
+
+model MotivoPerda {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm        DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
+  codigo          String   @unique(map: "motivos_perda_codigo_unico") @db.VarChar(40)
+  nome            String   @db.VarChar(100)
+  exigeObservacao Boolean  @default(false) @map("exige_observacao")
+
+  @@map("motivos_perda")
+}
+
 model Instituicao {
   id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   criadoEm       DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)

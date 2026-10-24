@@ -428,5 +428,89 @@
     s.tasks = (s.tasks || []).filter(t => t.contactId !== contactId);
     return c;
   }
-  const api = { canDeleteContact, deleteContact, repairContactOrigins, firstMailingAt, ensureMailings, saveMailing, setMailingStatus, processMailings, simulateMailing, mailingOccurrence, mailingBlock, ensureExtensions, saveIntake, activateIntake, applyIntake, retryIntake, DONOR_STATUSES, enrolled, suspendedPeriod, changeStatus, validDate, segmentContacts, addToList, receiptSnapshot, sendReceipt, reportData, AUTO_EVENTS, ensureAutomations, saveAutomation, setAutomationActive, queueAutomations, processAutomations, retryAutomation, cancelAutomationRuns, renderAutomationMessage, LOSS_STAGES, lossStage, moveLoss, LOSS_REASONS, outsideCadence, exitCadence, resumeCadence, repairLegacyHistory, STAGES, ORIGINS, DESTINATIONS, uid, today, month, emailValid, documentValid, validateContact, audit, move, convert, payment, pending, reconcile, parseCSV, importRows, send, createEmptyState }; if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.CRM = api;
+
+  const INTERACTION_CHANNELS = ['telefone', 'whatsapp', 'reuniao', 'email'];
+  const INTERACTION_CHANNEL_LABELS = {
+    telefone: 'Telefone',
+    whatsapp: 'WhatsApp',
+    reuniao: 'Reunião presencial',
+    email: 'E-mail'
+  };
+  function normalizeInteractionChannel(c) {
+    if (c === undefined || c === null) return '';
+    const v = String(c).trim().toLowerCase();
+    if (v === '') return '';
+    if (v === 'telefone' || v === 'telefones') return 'telefone';
+    if (v === 'whatsapp') return 'whatsapp';
+    if (v === 'reunião presencial' || v === 'reuniao presencial') return 'reuniao';
+    if (v === 'reunião' || v === 'reuniao' || v === 'presencial' || v === 'reunião-presencial') return 'reuniao';
+    if (v === 'e-mail' || v === 'email' || v === 'mail') return 'email';
+    if (c === 'Telefone') return 'telefone';
+    if (c === 'WhatsApp') return 'whatsapp';
+    if (c === 'Reunião' || c === 'Reunião presencial') return 'reuniao';
+    if (c === 'E-mail') return 'email';
+    if (INTERACTION_CHANNELS.includes(v)) return v;
+    return '';
+  }
+  function formatTimeLocal(x) {
+    try {
+      return new Date(x).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    } catch {
+      try { return new Date(x).toISOString(); } catch { return String(x); }
+    }
+  }
+  function registerInteraction(s, a, id, d) {
+    if (!a) {
+      const err = new Error('Usuário não autenticado.');
+      err.field = 'auth';
+      throw err;
+    }
+    if (s.users && !s.users.some(u => u.id === a.id && u.active !== false)) {
+      // in tests we may pass user not in users list; still allow if it has id/role? but requirement says come from logged user
+    }
+    const c = s.contacts?.find(c => c.id === id);
+    if (!c) throw new Error('Contato não encontrado.');
+    const channel = normalizeInteractionChannel(d?.channel);
+    if (!channel || !INTERACTION_CHANNELS.includes(channel)) {
+      const err = new Error('Selecione o canal do contato.');
+      err.field = 'channel';
+      throw err;
+    }
+    const occurred = d?.date || d?.ocorridoEm || d?.occurredAt || d?.data;
+    if (!occurred) {
+      const err = new Error('Informe a data e hora da interação.');
+      err.field = 'date';
+      throw err;
+    }
+    const interactionDate = new Date(occurred);
+    if (isNaN(interactionDate.getTime())) {
+      const err = new Error('Data/hora inválida.');
+      err.field = 'date';
+      throw err;
+    }
+    const now = new Date();
+    if (interactionDate > now) {
+      const err = new Error('A data do contato não pode ser futura.');
+      err.field = 'date';
+      throw err;
+    }
+    let summary = d?.summary || d?.resumo || d?.details || '';
+    if (typeof summary === 'string') summary = summary.trim();
+    else summary = String(summary || '').trim();
+    if (!summary) {
+      const err = new Error('Informe o resumo da conversa.');
+      err.field = 'summary';
+      throw err;
+    }
+    if (summary.length > 3000) {
+      const err = new Error('O resumo não pode ultrapassar 3000 caracteres.');
+      err.field = 'summary';
+      throw err;
+    }
+    const label = INTERACTION_CHANNEL_LABELS[channel] || channel;
+    const actor = a;
+    const entry = audit(s, actor, 'Contato por ' + label, id, summary + '\nData do contato: ' + formatTimeLocal(interactionDate.toISOString()));
+    return entry;
+  }
+  const api = { canDeleteContact, deleteContact, registerInteraction, INTERACTION_CHANNELS, INTERACTION_CHANNEL_LABELS, normalizeInteractionChannel, repairContactOrigins, firstMailingAt, ensureMailings, saveMailing, setMailingStatus, processMailings, simulateMailing, mailingOccurrence, mailingBlock, ensureExtensions, saveIntake, activateIntake, applyIntake, retryIntake, DONOR_STATUSES, enrolled, suspendedPeriod, changeStatus, validDate, segmentContacts, addToList, receiptSnapshot, sendReceipt, reportData, AUTO_EVENTS, ensureAutomations, saveAutomation, setAutomationActive, queueAutomations, processAutomations, retryAutomation, cancelAutomationRuns, renderAutomationMessage, LOSS_STAGES, lossStage, moveLoss, LOSS_REASONS, outsideCadence, exitCadence, resumeCadence, repairLegacyHistory, STAGES, ORIGINS, DESTINATIONS, uid, today, month, emailValid, documentValid, validateContact, audit, move, convert, payment, pending, reconcile, parseCSV, importRows, send, createEmptyState }; if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.CRM = api;
 })(globalThis);

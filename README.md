@@ -2,7 +2,7 @@
 
 Aplicação independente em React e Next.js para gestão da Luz da Esperança. Não é necessário executar o servidor nem carregar arquivos do protótipo original.
 
-Requisito: Node.js 20.9 ou superior.
+Requisito: Node.js 20.19 ou superior e PostgreSQL 13 ou superior para o Prisma.
 
 ```powershell
 git clone --branch develop https://github.com/prgrmnd/crm.git
@@ -11,9 +11,29 @@ npm.cmd ci
 npm.cmd run dev
 ```
 
-O frontend não exige variáveis de ambiente para funcionar. O arquivo `.env.example` documenta essa configuração vazia; as variáveis opcionais usadas pelos scripts de validação podem ser definidas no terminal conforme necessário.
+O frontend continua funcionando sem conexão com o banco. Para usar Prisma, copie `.env.example` para `.env` e informe a URL do PostgreSQL em `DATABASE_URL`.
+
+## Banco de dados e Prisma
+
+O projeto usa Prisma ORM 7 com PostgreSQL. O modelo fica em `prisma/schema.prisma`, a configuração da CLI em `prisma.config.ts` e as migrations versionadas em `prisma/migrations/`.
+
+```powershell
+npm.cmd ci
+npm.cmd run db:generate
+npm.cmd run db:migrate
+```
+
+`db:migrate` aplica a migration local e requer um servidor PostgreSQL acessível pela `DATABASE_URL`. Para aplicar migrations já geradas em ambientes de implantação, use `npm.cmd run db:deploy`. O identificador opcional da logo (`logo_arquivo_id`) será ligado por FK a `arquivos.id` quando a PB-061 criar essa tabela.
 
 Abra `http://127.0.0.1:3000`. Para executar junto com o protótipo, use `npm.cmd run dev -- --port 3001`.
+
+### Cadastro central de contatos (PB-057)
+
+O modelo `Contato` cria a tabela `contatos` com FKs para origens, etapas de captação e usuários (responsável e autor), preservando as referências com `RESTRICT`. A migration depende das tabelas de acesso e dos domínios dos funis já versionados.
+
+O banco normaliza e-mail com `lower(trim(email))`; e-mail, telefone e documento vazios viram `NULL`. É obrigatório informar ao menos e-mail ou telefone. Telefone deve conter 10 ou 11 dígitos com DDD; CPF/CNPJ deve ser enviado somente com dígitos e é validado por tamanho, tipo PF/PJ e dígitos verificadores. E-mail e documento são únicos inclusive em contatos excluídos logicamente. Site e Instagram aceitam somente classificação `inbound`.
+
+`data_cadastro` é obrigatória e permite preservar datas de migração. `atualizado_em` é mantido por trigger; `versao` começa em 1 e deve ser usada pelo consumidor em atualizações condicionais com incremento atômico para controle de concorrência. A tabela oferece `excluido_em`; o bloqueio de exclusão por histórico financeiro pertence ao fluxo PB-009. Esta entrega cria a estrutura de banco, sem migrar o estado local do frontend. A FK de auditoria para contatos será adicionada em migration posterior, após integração da PB-070.
 
 Produção:
 
@@ -52,6 +72,8 @@ RELATORIO-PARIDADE.md    correspondência e resultados de validação
 `ViewNode` converte o modelo de apresentação em elementos React, atributos JSX, objetos de estilo e eventos React. O controlador consulta e atualiza apenas essa árvore de estado; não altera o DOM montado. O React faz a renderização e reconciliação. Os templates preservam a estrutura, textos e seletores originais, incluindo fragmentos compartilhados por fichas, formulários, impressão e telas.
 
 ## Verificação
+
+`npm test` usa Docker Compose para iniciar um PostgreSQL 16 temporário em `127.0.0.1:55432`, aplica todas as migrations versionadas com `prisma migrate deploy`, executa a suite (incluindo os testes de integração) e remove container e volume temporário ao terminar. É necessário ter Docker Desktop ativo. O banco `crm_test` é descartável e não usa nem altera a `DATABASE_URL` do ambiente de desenvolvimento. Novos testes de integração devem usar `testWithDatabase` de `tests/helpers/postgres-test.cjs`; cada teste roda em uma transação que é desfeita ao final.
 
 ```powershell
 npm.cmd test

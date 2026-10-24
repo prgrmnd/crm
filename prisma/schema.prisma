@@ -1,0 +1,197 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Origem {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm          DateTime  @default(now()) @map("criado_em") @db.Timestamptz(6)
+  codigo            String    @unique(map: "origens_codigo_unico") @db.VarChar(30)
+  nome              String    @db.VarChar(80)
+  // inbound para Site/Instagram; nulo permite seleção manual.
+  classificacaoFixa String?   @map("classificacao_fixa") @db.VarChar(10)
+  ativo             Boolean   @default(true)
+  contatos          Contato[]
+
+  @@map("origens")
+}
+
+model EtapaCaptacao {
+  id       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm DateTime  @default(now()) @map("criado_em") @db.Timestamptz(6)
+  codigo   String    @unique(map: "etapas_captacao_codigo_unico") @db.VarChar(40)
+  nome     String    @db.VarChar(120)
+  ordem    Int       @unique(map: "etapas_captacao_ordem_unica") @db.SmallInt
+  contatos Contato[]
+
+  @@map("etapas_captacao")
+}
+
+model EtapaPerda {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm         DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
+  codigo           String   @unique(map: "etapas_perda_codigo_unico") @db.VarChar(40)
+  nome             String   @db.VarChar(120)
+  ordem            Int      @unique(map: "etapas_perda_ordem_unica") @db.SmallInt
+  exigeAgendamento Boolean  @default(false) @map("exige_agendamento")
+
+  @@map("etapas_perda")
+}
+
+model MotivoPerda {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm        DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
+  codigo          String   @unique(map: "motivos_perda_codigo_unico") @db.VarChar(40)
+  nome            String   @db.VarChar(100)
+  exigeObservacao Boolean  @default(false) @map("exige_observacao")
+
+  @@map("motivos_perda")
+}
+
+model Instituicao {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm       DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
+  nome           String   @db.VarChar(180)
+  documento      String?  @unique(map: "instituicoes_documento_unico") @db.VarChar(14)
+  cidade         String   @db.VarChar(100)
+  uf             String   @db.Char(2)
+  // A FK será adicionada quando a tabela Arquivo for criada na PB-061.
+  logoArquivoId  String?  @map("logo_arquivo_id") @db.Uuid
+  fusoHorario    String   @default("America/Sao_Paulo") @map("fuso_horario") @db.VarChar(80)
+  emailRemetente String?  @map("email_remetente") @db.VarChar(254)
+  nomeRemetente  String?  @map("nome_remetente") @db.VarChar(180)
+  atualizadoEm   DateTime @default(now()) @map("atualizado_em") @db.Timestamptz(6)
+
+  @@map("instituicoes")
+}
+
+model EventoAuditoria {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
+  atorTipo     String   @map("ator_tipo") @db.VarChar(10)
+  atorId       String?  @map("ator_id") @db.Uuid
+  contatoId    String?  @map("contato_id") @db.Uuid
+  acao         String   @db.VarChar(100)
+  entidadeTipo String   @map("entidade_tipo") @db.VarChar(80)
+  entidadeId   String?  @map("entidade_id") @db.Uuid
+  antes        Json?    @db.JsonB
+  depois       Json?    @db.JsonB
+  motivo       String?  @db.Text
+  correlacaoId String   @map("correlacao_id") @db.Uuid
+
+  @@index([contatoId, criadoEm(sort: Desc)], map: "eventos_auditoria_contato_timeline_idx")
+  @@index([correlacaoId], map: "eventos_auditoria_correlacao_idx")
+  @@map("eventos_auditoria")
+}
+
+model Usuario {
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm            DateTime           @default(now()) @map("criado_em") @db.Timestamptz(6)
+  nome                String             @db.VarChar(100)
+  // Unicidade normalizada garantida pelo índice usuarios_email_normalizado_unico (lower(trim(email))).
+  email               String             @db.VarChar(254)
+  // String PHC argon2id; a migration rejeita qualquer outro formato.
+  senhaHash           String             @map("senha_hash")
+  perfil              String             @db.VarChar(20)
+  ativo               Boolean            @default(true)
+  senhaAlteradaEm     DateTime           @default(now()) @map("senha_alterada_em") @db.Timestamptz(6)
+  criadoPorId         String?            @map("criado_por") @db.Uuid
+  atualizadoEm        DateTime           @default(now()) @map("atualizado_em") @db.Timestamptz(6)
+  versao              Int                @default(1)
+  criadoPor           Usuario?           @relation("UsuarioCriadoPor", fields: [criadoPorId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "usuarios_criado_por_fkey")
+  usuariosCriados     Usuario[]          @relation("UsuarioCriadoPor")
+  sessoes             Sessao[]
+  tentativasLogin     TentativaLogin[]
+  tokensRecuperacao   TokenRecuperacao[]
+  contatosResponsavel Contato[]          @relation("ContatoResponsavel")
+  contatosCriados     Contato[]          @relation("ContatoCriadoPor")
+
+  @@index([criadoPorId], map: "usuarios_criado_por_idx")
+  @@map("usuarios")
+}
+
+model Sessao {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm       DateTime  @default(now()) @map("criado_em") @db.Timestamptz(6)
+  usuarioId      String    @map("usuario_id") @db.Uuid
+  // SHA-256 hexadecimal; nunca o token bruto.
+  tokenHash      String    @unique(map: "sessoes_token_hash_unico") @map("token_hash")
+  ultimoAcessoEm DateTime  @default(now()) @map("ultimo_acesso_em") @db.Timestamptz(6)
+  expiraEm       DateTime  @map("expira_em") @db.Timestamptz(6)
+  revogadaEm     DateTime? @map("revogada_em") @db.Timestamptz(6)
+  ip             String?   @db.Inet
+  agenteUsuario  String?   @map("agente_usuario")
+  usuario        Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "sessoes_usuario_id_fkey")
+
+  @@index([usuarioId], map: "sessoes_usuario_id_idx")
+  @@index([expiraEm], map: "sessoes_expira_em_idx")
+  @@map("sessoes")
+}
+
+model TentativaLogin {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm          DateTime  @default(now()) @map("criado_em") @db.Timestamptz(6)
+  usuarioId         String?   @map("usuario_id") @db.Uuid
+  // SHA-256 hexadecimal de lower(trim(email)) tentado.
+  identificadorHash String    @map("identificador_hash")
+  ip                String?   @db.Inet
+  sucesso           Boolean
+  bloqueadoAte      DateTime? @map("bloqueado_ate") @db.Timestamptz(6)
+  usuario           Usuario?  @relation(fields: [usuarioId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "tentativas_login_usuario_id_fkey")
+
+  @@index([identificadorHash, criadoEm], map: "tentativas_login_identificador_criado_em_idx")
+  @@index([ip, criadoEm], map: "tentativas_login_ip_criado_em_idx")
+  @@index([usuarioId], map: "tentativas_login_usuario_id_idx")
+  @@map("tentativas_login")
+}
+
+model TokenRecuperacao {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm     DateTime  @default(now()) @map("criado_em") @db.Timestamptz(6)
+  usuarioId    String    @map("usuario_id") @db.Uuid
+  // SHA-256 hexadecimal do token do link; nunca o token bruto.
+  tokenHash    String    @unique(map: "tokens_recuperacao_token_hash_unico") @map("token_hash")
+  // No máximo 15 minutos após criado_em (CHECK na migration).
+  expiraEm     DateTime  @default(dbgenerated("(CURRENT_TIMESTAMP + '00:15:00'::interval)")) @map("expira_em") @db.Timestamptz(6)
+  consumidoEm  DateTime? @map("consumido_em") @db.Timestamptz(6)
+  invalidadoEm DateTime? @map("invalidado_em") @db.Timestamptz(6)
+  usuario      Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "tokens_recuperacao_usuario_id_fkey")
+
+  // O índice único parcial tokens_recuperacao_um_ativo_por_usuario fica só na migration (Prisma não modela índice parcial).
+  @@index([usuarioId, expiraEm], map: "tokens_recuperacao_usuario_expira_em_idx")
+  @@map("tokens_recuperacao")
+}
+
+model Contato {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm        DateTime      @default(now()) @map("criado_em") @db.Timestamptz(6)
+  tipoPessoa      String        @map("tipo_pessoa") @db.Char(2)
+  nome            String        @db.VarChar(180)
+  // Trigger normaliza lower(trim(email)) e transforma vazio em NULL antes do UNIQUE.
+  email           String?       @unique(map: "contatos_email_unico") @db.VarChar(254)
+  telefone        String?       @db.VarChar(11)
+  documento       String?       @unique(map: "contatos_documento_unico") @db.VarChar(14)
+  origemId        String        @map("origem_id") @db.Uuid
+  classificacao   String        @db.VarChar(10)
+  etapaCaptacaoId String        @map("etapa_captacao_id") @db.Uuid
+  responsavelId   String        @map("responsavel_id") @db.Uuid
+  dataCadastro    DateTime      @map("data_cadastro") @db.Timestamptz(6)
+  criadoPorId     String        @map("criado_por") @db.Uuid
+  atualizadoEm    DateTime      @default(now()) @map("atualizado_em") @db.Timestamptz(6)
+  excluidoEm      DateTime?     @map("excluido_em") @db.Timestamptz(6)
+  versao          Int           @default(1)
+  origem          Origem        @relation(fields: [origemId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "contatos_origem_id_fkey")
+  etapaCaptacao   EtapaCaptacao @relation(fields: [etapaCaptacaoId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "contatos_etapa_captacao_id_fkey")
+  responsavel     Usuario       @relation("ContatoResponsavel", fields: [responsavelId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "contatos_responsavel_id_fkey")
+  criadoPor       Usuario       @relation("ContatoCriadoPor", fields: [criadoPorId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "contatos_criado_por_fkey")
+
+  @@index([responsavelId, dataCadastro], map: "contatos_responsavel_data_cadastro_idx")
+  @@index([origemId, classificacao], map: "contatos_origem_classificacao_idx")
+  @@index([etapaCaptacaoId], map: "contatos_etapa_captacao_idx")
+  @@index([criadoPorId], map: "contatos_criado_por_idx")
+  @@map("contatos")
+}

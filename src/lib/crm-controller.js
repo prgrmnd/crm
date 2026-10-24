@@ -1172,7 +1172,16 @@ export function createCRMController(model) {
     );
   }
   function emailEligible(c) {
-    return Boolean(c?.email && D.emailValid(c.email) && !c.optOut);
+    if (!c) return false;
+    let hasOptOut = !!c.optOut;
+    try {
+      if (typeof D.getActiveOptOut === "function") {
+        hasOptOut = hasOptOut || !!D.getActiveOptOut(state, c.id);
+      } else if (D.hasActiveOptOut) {
+        hasOptOut = hasOptOut || D.hasActiveOptOut(state, c.id);
+      }
+    } catch {}
+    return Boolean(c?.email && D.emailValid(c.email) && !hasOptOut);
   }
   function cleanContactSelection() {
     selectedContacts = new Set(
@@ -1695,13 +1704,37 @@ export function createCRMController(model) {
     };
     bindOriginDirection();
   }
+  function getActiveOptOutRec(s, contactId) {
+    try {
+      if (typeof D.getActiveOptOut === "function") return D.getActiveOptOut(s, contactId);
+    } catch {}
+    D.ensureOptOuts && D.ensureOptOuts(s);
+    const list = s.optOuts || s.optouts || [];
+    for (let i = list.length - 1; i >= 0; i--) {
+      const o = list[i];
+      if (o.contactId === contactId) {
+        if (o.revokedAt || o.revogado_em) continue;
+        if (o.active === false) continue;
+        return o;
+      }
+    }
+    return null;
+  }
+
   function profile(id) {
     const c = state.contacts.find((c) => c.id === id);
     if (!c) throw Error("Contato não encontrado.");
     const ps = state.payments.filter((p) => p.contactId === id);
+    const optOutRec = getActiveOptOutRec(state, id);
+    const hasOptOut = !!(optOutRec || c.optOut);
+    const optOutInfo = optOutRec
+      ? `Contato com opt-out ativo${optOutRec.at || optOutRec.data_hora ? " · " + (optOutRec.at || optOutRec.data_hora) : ""}${optOutRec.actorName || optOutRec.registrado_por ? " · Responsável: " + (optOutRec.actorName || state.users.find(u=>u.id===(optOutRec.registrado_por||optOutRec.registeredBy||optOutRec.actor))?.name || optOutRec.registrado_por || "") : ""}`
+      : c.optOut
+        ? "Contato com opt-out ativo"
+        : "";
     modal(
       "Ficha de relacionamento",
-      `<div class="profile-hero">${avatar(c)}<div><h2>${esc(c.name)}</h2><p style="margin-top:7px">${statusBadge(c)} ${badge(c.type, "gold")}  ${c.optOut ? badge("Descadastrado de e-mails", "gray") : ""}</p></div></div><div class="profile-grid"><div><dl class="details"><div><dt>E-mail</dt><dd>${esc(c.email || "Não informado")}</dd></div><div><dt>Telefone</dt><dd>${esc(c.phone || "Não informado")}</dd></div><div><dt>CPF / CNPJ</dt><dd>${esc(c.document || "Não informado")}</dd></div><div><dt>Origem</dt><dd>${esc(c.origin)} · ${c.funnel}</dd></div><div><dt>Responsável</dt><dd>${esc(state.users.find((u) => u.id === c.owner)?.name || "—")}</dd></div><div><dt>Desde</dt><dd>${date(c.created)}</dd></div></dl><div class="notice green"><small>Etapa atual</small><p>${D.STAGES[c.stage]}</p>${D.outsideCadence(c) ? `<p>Etapa de perdas: ${esc(D.LOSS_STAGES[D.lossStage(c)])}</p>${c.cadenceExit.followUpDate ? `<p>Retomada agendada: ${date(c.cadenceExit.followUpDate)}</p>` : ""}<p><b>Fora da cadência</b> · ${esc(c.cadenceExit.reason)}</p><p>${esc(c.cadenceExit.note)}</p><p>Saída: ${date(c.cadenceExit.date)} · ${esc(c.cadenceExit.actorName)}</p><p>Última etapa: ${esc(D.STAGES[c.cadenceExit.stage])}</p>` : ""}${c.plan ? `<p style="margin-top:10px">Compromisso: <b>${money(c.plan.amount)}</b> · ${c.plan.mode}${c.plan.due ? " · Dia " + c.plan.due : ""}</p>` : ""}</div>${enrollmentInfo(c)}${intakeSummary(c)}${contactTasks(c)}<div class="profile-actions">${button("Editar", "contact", id, "secondary small", "edit")}${D.outsideCadence(c) ? button("Mover etapa de perdas", "loss-move", id, "secondary small") + button("Retomar cadência", "cadence-resume", id, "secondary small") : button("Registrar perda", "cadence-exit", id, "secondary small")}${!c.plan && !D.outsideCadence(c) ? button("Mover etapa", "move", id, "secondary small", "funnel") + button("Converter em doador", "convert", id, "small", "heart") : c.plan ? button("Registrar doação", "payment", id, "small", "plus") + button("Alterar status", "donor-status", id, "secondary small") : ""}${button("Registrar interação", "interaction", id, "secondary small", "plus")}${button("Registrar resposta", "response", id, "secondary small", "mail")}${c.plan ? button("Comprovante de adesão", "adherence", id, "quiet small", "file") : ""}${!c.optOut && c.email ? button("Enviar mensagem", "contact-mail", id, "quiet small", "mail") : ""}${user.role === "Administrador" ? button("Excluir contato", "delete-contact", id, "danger small") : ""}</div>${ps.length
+      `<div class="profile-hero">${avatar(c)}<div><h2>${esc(c.name)}</h2><p style="margin-top:7px">${statusBadge(c)} ${badge(c.type, "gold")}  ${hasOptOut ? badge("Descadastrado", "gray") : ""}</p></div></div>${hasOptOut ? `<div class="notice red" style="margin-bottom:18px"><strong>Contato com opt-out ativo</strong>${optOutRec?.at || optOutRec?.data_hora ? " · " + date(optOutRec.at || optOutRec.data_hora) + " " + time(optOutRec.at || optOutRec.data_hora) : c.optOut ? "" : ""}${(optOutRec?.actorName || optOutRec?.registrado_por || optOutRec?.registeredBy) ? " · " + esc(optOutRec.actorName || state.users.find(u=>u.id===(optOutRec.registrado_por||optOutRec.registeredBy||optOutRec.actor))?.name || optOutRec.registrado_por || optOutRec.registeredBy || "") : ""}${optOutRec?.motivo || optOutRec?.observacao || optOutRec?.reason || optOutRec?.note ? "<br><small>" + esc(optOutRec.motivo || optOutRec.observacao || optOutRec.reason || optOutRec.note) + "</small>" : ""}</div>` : ""}<div class="profile-grid"><div><dl class="details"><div><dt>E-mail</dt><dd>${esc(c.email || "Não informado")}</dd></div><div><dt>Telefone</dt><dd>${esc(c.phone || "Não informado")}</dd></div><div><dt>CPF / CNPJ</dt><dd>${esc(c.document || "Não informado")}</dd></div><div><dt>Origem</dt><dd>${esc(c.origin)} · ${c.funnel}</dd></div><div><dt>Responsável</dt><dd>${esc(state.users.find((u) => u.id === c.owner)?.name || "—")}</dd></div><div><dt>Desde</dt><dd>${date(c.created)}</dd></div></dl><div class="notice green"><small>Etapa atual</small><p>${D.STAGES[c.stage]}</p>${D.outsideCadence(c) ? `<p>Etapa de perdas: ${esc(D.LOSS_STAGES[D.lossStage(c)])}</p>${c.cadenceExit.followUpDate ? `<p>Retomada agendada: ${date(c.cadenceExit.followUpDate)}</p>` : ""}<p><b>Fora da cadência</b> · ${esc(c.cadenceExit.reason)}</p><p>${esc(c.cadenceExit.note)}</p><p>Saída: ${date(c.cadenceExit.date)} · ${esc(c.cadenceExit.actorName)}</p><p>Última etapa: ${esc(D.STAGES[c.cadenceExit.stage])}</p>` : ""}${c.plan ? `<p style="margin-top:10px">Compromisso: <b>${money(c.plan.amount)}</b> · ${c.plan.mode}${c.plan.due ? " · Dia " + c.plan.due : ""}</p>` : ""}</div>${enrollmentInfo(c)}${intakeSummary(c)}${contactTasks(c)}<div class="profile-actions">${button("Editar", "contact", id, "secondary small", "edit")}${D.outsideCadence(c) ? button("Mover etapa de perdas", "loss-move", id, "secondary small") + button("Retomar cadência", "cadence-resume", id, "secondary small") : button("Registrar perda", "cadence-exit", id, "secondary small")}${!c.plan && !D.outsideCadence(c) ? button("Mover etapa", "move", id, "secondary small", "funnel") + button("Converter em doador", "convert", id, "small", "heart") : c.plan ? button("Registrar doação", "payment", id, "small", "plus") + button("Alterar status", "donor-status", id, "secondary small") : ""}${button("Registrar interação", "interaction", id, "secondary small", "plus")}${button("Registrar resposta", "response", id, "secondary small", "mail")}${c.plan ? button("Comprovante de adesão", "adherence", id, "quiet small", "file") : ""}${!hasOptOut && c.email ? button("Enviar mensagem", "contact-mail", id, "quiet small", "mail") : ""}${!hasOptOut ? button("Registrar opt-out", "optout", id, "secondary small") : ""}${user.role === "Administrador" ? button("Excluir contato", "delete-contact", id, "danger small") : ""}</div>${ps.length
         ? `<h3 style="margin:22px 0 8px">Contribuições · ${money(total(ps))}</h3>${ps
           .slice(0, 4)
           .map(
@@ -1844,7 +1877,20 @@ export function createCRMController(model) {
       (d) => {
         if (!d.message.trim()) throw Error("Informe o conteúdo da resposta.");
         const c = state.contacts.find((c) => c.id === id);
-        if (d.classification === "Pedido de descadastro") c.optOut = true;
+        if (d.classification === "Pedido de descadastro") {
+          try {
+            if (typeof D.optOutContact === "function") {
+              D.optOutContact(state, user, id, { motivo: d.message });
+            } else if (typeof D.registerOptOut === "function") {
+              D.registerOptOut(state, user, id, { motivo: d.message });
+              c.optOut = true;
+            } else {
+              c.optOut = true;
+            }
+          } catch {
+            c.optOut = true;
+          }
+        }
         D.audit(
           state,
           user,
@@ -1863,6 +1909,44 @@ export function createCRMController(model) {
         );
       },
       "Registrar resposta",
+    );
+  }
+
+  function optOutForm(id) {
+    const c = state.contacts.find((c) => c.id === id);
+    if (!c) throw Error("Contato não encontrado.");
+    formModal(
+      "Registrar opt-out",
+      `<p class="notice red">Esta ação é sensível. Ao confirmar, o contato será marcado com opt-out ativo e envios (imediatos e agendados) serão bloqueados.</p><div class="field"><label for="f-motivo">Motivo/observação (opcional)</label><textarea id="f-motivo" name="motivo" maxlength="1000" placeholder="Informe o motivo ou observação opcional."></textarea></div>`,
+      (d) => {
+        try {
+          activeUser();
+          if (typeof D.optOutContact === "function") {
+            D.optOutContact(state, user, id, { motivo: d.motivo });
+          } else {
+            if (typeof D.registerOptOut === "function") {
+              D.registerOptOut(state, user, id, { motivo: d.motivo });
+              c.optOut = true;
+            } else {
+              c.optOut = true;
+            }
+            // Cancel pending
+            if (Array.isArray(state.mailings)) {
+              for (const m of state.mailings) {
+                if (Array.isArray(m.contacts)) m.contacts = m.contacts.filter((x) => x !== id);
+              }
+            }
+          }
+          save();
+          closeModal();
+          render();
+          profile(id);
+          toast("Opt-out registrado com sucesso.");
+        } catch (err) {
+          toast(err.message, "error");
+        }
+      },
+      "Confirmar opt-out",
     );
   }
   function statusForm(id) {
@@ -2166,7 +2250,8 @@ export function createCRMController(model) {
       "Revisar envio",
       true,
     );
-    if (c.optOut) $("[type=submit]", $("#modal-form")).disabled = true;
+    const hasOptOutRec2 = (function(){ try { return typeof D.getActiveOptOut==='function' ? D.getActiveOptOut(state, c.id) : null; } catch { return null; } })();
+    if (c.optOut || hasOptOutRec2) $("[type=submit]", $("#modal-form")).disabled = true;
   }
   function reportPrint() {
     admin();
@@ -2833,6 +2918,9 @@ export function createCRMController(model) {
           break;
         case "response":
           responseForm(id);
+          break;
+        case "optout":
+          optOutForm(id);
           break;
         case "donor-status":
           statusForm(id);

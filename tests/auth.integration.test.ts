@@ -31,7 +31,7 @@ test("login aplica bloqueio, registra auditoria e revoga sessões inativas", asy
   });
   const senhaHash = generatedHash.replace(
     /\$m=(\d+),p=(\d+),t=(\d+)\$/,
-    (_, memory, parallelism, time) =>
+    (_: string, memory: string, parallelism: string, time: string) =>
       "$m=" + memory + ",t=" + time + ",p=" + parallelism + "$",
   );
   const user = await prisma.usuario.create({

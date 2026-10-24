@@ -154,8 +154,8 @@ export function createCRMController(model) {
   const $f = (s) => $(s, $("#modal"));
   const field = (label, name, value = "", type = "text", extra = "") =>
     `<div class="field"><label for="f-${name}">${label}</label><input id="f-${name}" name="${name}" type="${type}" value="${esc(value)}" ${extra}></div>`;
-  const selectField = (label, name, options, value = "", placeholder = "") =>
-    `<div class="field"><label for="f-${name}">${label}</label>${select(name, options, value, placeholder).replace("<select ", '<select id="f-' + name + '" ')}</div>`;
+  const selectField = (label, name, options, value = "", placeholder = "", required = false) =>
+    `<div class="field"><label for="f-${name}">${label}${required ? " *" : ""}</label>${select(name, options, value, placeholder).replace("<select ", `<select id="f-${name}" ${required ? "required " : ""}`)}</div>`;
   let emailTab = "messages";
   let selectedContacts = new Set(),
     funnelView = "board",
@@ -1772,20 +1772,41 @@ export function createCRMController(model) {
     );
   }
   function interactionForm(id) {
+    const nowLocal = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     formModal(
       "Cultive esse relacionamento",
-      `${selectField("Como foi o contato?", "channel", ["Telefone", "WhatsApp", "Reunião", "E-mail"], "WhatsApp")}${field("Data e hora do contato", "date", new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16), "datetime-local", "required")}<div class="field"><label for="f-summary">Resumo da conversa *</label><textarea id="f-summary" name="summary" required maxlength="3000" placeholder="Conte o que foi conversado e os próximos passos."></textarea></div><small>Este registro preserva o histórico e identifica o operador responsável.</small>`,
+      `${selectField("Como foi o contato?", "channel", ["Telefone", "WhatsApp", "Reunião presencial", "E-mail"], "", "Selecione o canal")}<div class="field"><label for="f-date">Data e hora do contato *</label><input id="f-date" name="date" type="datetime-local" value="${nowLocal}" required max="${nowLocal}"></div><div class="field"><label for="f-summary">Resumo/detalhes *</label><textarea id="f-summary" name="summary" required maxlength="3000" placeholder="Conte o que foi conversado e os próximos passos."></textarea><small class="muted">0 / 3000</small></div><small>Este registro preserva o histórico e identifica o operador responsável.</small>`,
       (d) => {
-        if (new Date(d.date) > new Date())
-          throw Error("A data do contato não pode ser futura.");
-        if (!d.summary.trim()) throw Error("Informe o resumo da conversa.");
-        D.audit(
-          state,
-          user,
-          "Contato por " + d.channel,
-          id,
-          d.summary + "\nData do contato: " + time(d.date),
-        );
+        const payload = {
+          channel: d.channel,
+          date: d.date,
+          summary: d.summary,
+        };
+        if (typeof D.registerInteraction === "function") {
+          try {
+            D.registerInteraction(state, user, id, payload);
+          } catch (err) {
+            if (err.field === "channel") throw Error("Selecione o canal do contato.");
+            if (err.field === "date") throw Error(err.message);
+            if (err.field === "summary") throw Error(err.message);
+            throw err;
+          }
+        } else {
+          if (!d.channel) throw Error("Selecione o canal do contato.");
+          if (!d.date) throw Error("Informe a data e hora do contato.");
+          const interactionDate = new Date(d.date);
+          const now = new Date();
+          if (interactionDate > now) throw Error("A data do contato não pode ser futura.");
+          if (!d.summary || !String(d.summary).trim()) throw Error("Informe o resumo da conversa.");
+          if (String(d.summary).trim().length > 3000) throw Error("O resumo não pode ultrapassar 3000 caracteres.");
+          D.audit(
+            state,
+            user,
+            "Contato por " + d.channel,
+            id,
+            String(d.summary).trim() + "\nData do contato: " + time(interactionDate.toISOString()),
+          );
+        }
         save();
         closeModal();
         render();
@@ -1794,6 +1815,27 @@ export function createCRMController(model) {
       },
       "Registrar interação",
     );
+    setTimeout(() => {
+      const summary = document.getElementById("f-summary");
+      const counter = summary?.nextElementSibling;
+      if (summary && counter && counter.tagName === "SMALL") {
+        counter.textContent = summary.value.length + " / 3000";
+        summary.oninput = () => {
+          counter.textContent = summary.value.length + " / 3000";
+        };
+      }
+      const dateInput = document.getElementById("f-date");
+      if (dateInput) {
+        dateInput.max = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        dateInput.onchange = dateInput.oninput = () => {
+          const now = new Date();
+          const selected = new Date(dateInput.value);
+          if (selected > now) {
+            dateInput.value = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+          }
+        };
+      }
+    }, 0);
   }
   function responseForm(id) {
     formModal(

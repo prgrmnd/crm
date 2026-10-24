@@ -110,6 +110,10 @@ model Usuario {
   contatosResponsavel Contato[]          @relation("ContatoResponsavel")
   contatosCriados     Contato[]          @relation("ContatoCriadoPor")
 
+  interacoes              Interacao[]
+  respostasContato        RespostaContato[]
+  preferenciasComunicacao PreferenciaComunicacao[]
+
   @@index([criadoPorId], map: "usuarios_criado_por_idx")
   @@map("usuarios")
 }
@@ -189,9 +193,69 @@ model Contato {
   responsavel     Usuario       @relation("ContatoResponsavel", fields: [responsavelId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "contatos_responsavel_id_fkey")
   criadoPor       Usuario       @relation("ContatoCriadoPor", fields: [criadoPorId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "contatos_criado_por_fkey")
 
+  interacoes              Interacao[]
+  respostasContato        RespostaContato[]
+  preferenciasComunicacao PreferenciaComunicacao[]
+
   @@index([responsavelId, dataCadastro], map: "contatos_responsavel_data_cadastro_idx")
   @@index([origemId, classificacao], map: "contatos_origem_classificacao_idx")
   @@index([etapaCaptacaoId], map: "contatos_etapa_captacao_idx")
   @@index([criadoPorId], map: "contatos_criado_por_idx")
   @@map("contatos")
+}
+
+model Interacao {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
+  contatoId  String   @map("contato_id") @db.Uuid
+  canal      String   @db.VarChar(20)
+  ocorridoEm DateTime @map("ocorrido_em") @db.Timestamptz(6)
+  resumo     String   @db.VarChar(3000)
+  autorId    String   @map("autor_id") @db.Uuid
+  contato    Contato  @relation(fields: [contatoId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  autor      Usuario  @relation(fields: [autorId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([contatoId, ocorridoEm], map: "interacoes_contato_ocorrido_idx")
+  @@index([autorId], map: "interacoes_autor_idx")
+  @@map("interacoes")
+}
+
+model RespostaContato {
+  id                  String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm            DateTime                 @default(now()) @map("criado_em") @db.Timestamptz(6)
+  contatoId           String                   @map("contato_id") @db.Uuid
+  classificacao       String                   @db.VarChar(20)
+  conteudo            String                   @db.VarChar(3000)
+  // Adicionar a FK quando envio_destinatarios existir.
+  envioDestinatarioId String?                  @map("envio_destinatario_id") @db.Uuid
+  autorId             String                   @map("autor_id") @db.Uuid
+  contato             Contato                  @relation(fields: [contatoId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  autor               Usuario                  @relation(fields: [autorId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  preferencias        PreferenciaComunicacao[]
+
+  @@index([contatoId, criadoEm], map: "respostas_contato_timeline_idx")
+  @@index([autorId], map: "respostas_contato_autor_idx")
+  @@map("respostas_contato")
+}
+
+model PreferenciaComunicacao {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm     DateTime         @default(now()) @map("criado_em") @db.Timestamptz(6)
+  contatoId    String           @map("contato_id") @db.Uuid
+  canal        String           @db.VarChar(10)
+  situacao     String           @db.VarChar(15)
+  vigenteDesde DateTime         @map("vigente_desde") @db.Timestamptz(6)
+  vigenteAte   DateTime?        @map("vigente_ate") @db.Timestamptz(6)
+  motivo       String?
+  respostaId   String?          @map("resposta_id") @db.Uuid
+  autorId      String?          @map("autor_id") @db.Uuid
+  contato      Contato          @relation(fields: [contatoId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  resposta     RespostaContato? @relation(fields: [respostaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  autor        Usuario?         @relation(fields: [autorId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  // Índice único parcial e exclusão de períodos sobrepostos definidos na migration.
+  @@index([contatoId, canal, vigenteDesde], map: "preferencias_contato_canal_desde_idx")
+  @@index([respostaId], map: "preferencias_resposta_idx")
+  @@index([autorId], map: "preferencias_autor_idx")
+  @@map("preferencias_comunicacao")
 }

@@ -81,6 +81,21 @@ O modelo `Contato` cria a tabela `contatos` com FKs para `origens`, `etapas_capt
 - **Tipagem PF/PJ e validação de dígitos verificadores**: `tipo_pessoa` aceita `'PF'` ou `'PJ'`. `telefone` deve conter 10 ou 11 dígitos numéricos com DDD (`^[0-9]{10,11}$`). A função `contatos_documento_valido(documento, tipo_pessoa)` valida CPF/CNPJ exclusivamente numérico quanto ao tamanho (11 dígitos para PF, 14 para PJ), rejeição de sequências repetidas e cálculo dos dígitos verificadores.
 - **Regras de classificação e concorrência por versão**: o trigger `contatos_preparar_gravacao` garante que origens `site` e `instagram` aceitem somente classificação `'inbound'` (`ERRCODE = '23514'`) e mantém `atualizado_em` em atualizações. `data_cadastro` é obrigatória e permite preservar datas de migração; `versao` começa em `1` (`versao > 0`) e deve ser usada pelo consumidor em atualizações condicionais com incremento atômico para controle otimista de concorrência. A tabela oferece `excluido_em` para exclusão lógica.
 
+### Histórico e opt-out (PB-058)
+
+Os modelos `Interacao`, `RespostaContato` e `PreferenciaComunicacao` representam as tabelas `interacoes`, `respostas_contato` e `preferencias_comunicacao`. A migration depende de contatos, usuários e auditoria e exige a extensão PostgreSQL `btree_gist` (instalada com `CREATE EXTENSION IF NOT EXISTS`; o usuário das migrations precisa dessa permissão).
+
+- Interações aceitam telefone, WhatsApp, reunião ou e-mail, data não futura e resumo obrigatório de até 3000 caracteres. Triggers bloqueiam UPDATE, DELETE e TRUNCATE de interações e respostas, inclusive pelo Prisma. As FKs preservam contato e autoria com RESTRICT.
+- Preferências cobrem o canal `email`, com situações `permitido` e `descadastrado`. Os períodos são semiabertos `[vigente_desde, vigente_ate)`, com fim nulo para a versão atual. Um índice único parcial limita uma versão sem fim por contato/canal; uma exclusion constraint GiST impede qualquer sobreposição, inclusive entre transações concorrentes. Uma versão só pode ser alterada para encerrar a vigência; exclusão e reescrita do histórico são bloqueadas.
+- Contatos existentes recebem uma preferência inicial `permitido` desde `criado_em` durante a migration; novos contatos recebem a mesma preferência por trigger. Isso reproduz `optOut=false` do protótipo. A política institucional de consentimento ainda precisa de ratificação; essa carga não representa consentimento ratificado.
+- Para registrar descadastro, inserir uma `RespostaContato` com `classificacao = 'descadastro'`. O trigger serializa os pedidos do contato, encerra a preferência anterior, cria a versão descadastrada vinculada à resposta e registra `comunicacao.descadastro` em `eventos_auditoria`, tudo na transação da inserção. Falha em qualquer etapa desfaz todos esses efeitos. Não duplicar esses efeitos na aplicação. Uma nova resposta de descadastro é um novo registro histórico; repetir a mesma requisição ainda exige idempotência no consumidor.
+- `envio_destinatario_id` é UUID opcional sem FK até a tabela `envio_destinatarios` existir. Não há tela ou fluxo de reopt-in nesta entrega.
+
+Os consumidores de envios e réguas devem consultar a preferência vigente no instante do envio e exigir `situacao = 'permitido'`, usando `vigente_desde <= instante AND (vigente_ate IS NULL OR instante < vigente_ate)`. A estrutura não envia mensagens nem cancela agendamentos por si só. O frontend ainda usa o estado do protótipo (`optOut`); a ligação das telas e dos serviços de envio a essas tabelas permanece nas tarefas operacionais correspondentes.
+
+As FKs pendentes de `eventos_auditoria` para usuários e contatos permanecem uma pendência da auditoria; não foram adicionadas nesta issue para evitar alterar seus contratos e fixtures fora do escopo.
+
+
 ### Ficha 360° e formulário rápido de interações (PB-009 / PB-010)
 
 A Ficha 360° do contato e a linha do tempo (`src/lib/domain.cjs` e `src/lib/crm-controller.js`) implementam as travas operacionais de proteção do histórico e de registro de interações:

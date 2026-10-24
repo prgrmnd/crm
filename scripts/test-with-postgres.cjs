@@ -75,17 +75,32 @@ try {
     DATABASE_URL_TEST: databaseUrl,
   };
   const prismaCli = require.resolve('prisma/build/index.js');
-  const migrationStatus = run(process.execPath, [prismaCli, 'migrate', 'deploy'], { env: testEnv });
+  const generateStatus = run(process.execPath, [prismaCli, 'generate'], { env: testEnv });
 
-  if (migrationStatus !== 0) {
-    console.error('Falha ao aplicar as migrations no PostgreSQL temporário de teste.');
-    testStatus = migrationStatus;
+  if (generateStatus !== 0) {
+    console.error('Falha ao gerar o Prisma Client para os testes.');
+    testStatus = generateStatus;
   } else {
-    testStatus = run(
-      process.execPath,
-      ['--test', 'tests/*.test.cjs', 'tests/*.test.js'],
-      { env: testEnv },
-    );
+    const migrationStatus = run(process.execPath, [prismaCli, 'migrate', 'deploy'], { env: testEnv });
+
+    if (migrationStatus !== 0) {
+      console.error('Falha ao aplicar as migrations no PostgreSQL temporário de teste.');
+      testStatus = migrationStatus;
+    } else {
+      testStatus = run(
+        process.execPath,
+        [
+          '--experimental-strip-types',
+          '--import',
+          './tests/test-setup.mjs',
+          '--test',
+          'tests/*.test.cjs',
+          'tests/*.test.js',
+          'tests/*.test.ts',
+        ],
+        { env: testEnv },
+      );
+    }
   }
 } finally {
   const stopStatus = runDocker([...composeArgs, 'down', '--volumes', '--remove-orphans']);

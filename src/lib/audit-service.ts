@@ -1,4 +1,5 @@
 import { getPrismaClient } from "@/lib/prisma.ts";
+import type { Prisma } from "@/generated/prisma/client.ts";
 
 const sensitiveKey =
   /(senha|password|credential|credencial|token|secret|segredo|salt|hash|authorization|cookie)/i;
@@ -32,11 +33,15 @@ function sanitizeSnapshot(value: unknown): unknown {
   return value;
 }
 
-export async function recordAuditEvent(event: AuditEventInput) {
+export async function recordAuditEvent(
+  event: AuditEventInput,
+  transaction?: Prisma.TransactionClient,
+) {
   const before = event.before ? sanitizeSnapshot(event.before) : undefined;
   const after = event.after ? sanitizeSnapshot(event.after) : undefined;
 
-  return getPrismaClient().eventoAuditoria.create({
+  const client = transaction ?? getPrismaClient();
+  return client.eventoAuditoria.create({
     data: {
       atorTipo: event.actorType,
       atorId: event.actorId ?? null,

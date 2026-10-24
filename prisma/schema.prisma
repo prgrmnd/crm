@@ -8,23 +8,25 @@ datasource db {
 }
 
 model Origem {
-  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  criadoEm          DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
-  codigo            String   @unique(map: "origens_codigo_unico") @db.VarChar(30)
-  nome              String   @db.VarChar(80)
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm          DateTime  @default(now()) @map("criado_em") @db.Timestamptz(6)
+  codigo            String    @unique(map: "origens_codigo_unico") @db.VarChar(30)
+  nome              String    @db.VarChar(80)
   // inbound para Site/Instagram; nulo permite seleção manual.
-  classificacaoFixa String?  @map("classificacao_fixa") @db.VarChar(10)
-  ativo             Boolean  @default(true)
+  classificacaoFixa String?   @map("classificacao_fixa") @db.VarChar(10)
+  ativo             Boolean   @default(true)
+  contatos          Contato[]
 
   @@map("origens")
 }
 
 model EtapaCaptacao {
-  id       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  criadoEm DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
-  codigo   String   @unique(map: "etapas_captacao_codigo_unico") @db.VarChar(40)
-  nome     String   @db.VarChar(120)
-  ordem    Int      @unique(map: "etapas_captacao_ordem_unica") @db.SmallInt
+  id       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm DateTime  @default(now()) @map("criado_em") @db.Timestamptz(6)
+  codigo   String    @unique(map: "etapas_captacao_codigo_unico") @db.VarChar(40)
+  nome     String    @db.VarChar(120)
+  ordem    Int       @unique(map: "etapas_captacao_ordem_unica") @db.SmallInt
+  contatos Contato[]
 
   @@map("etapas_captacao")
 }
@@ -67,25 +69,50 @@ model Instituicao {
   @@map("instituicoes")
 }
 
+model EventoAuditoria {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
+  atorTipo     String   @map("ator_tipo") @db.VarChar(10)
+  atorId       String?  @map("ator_id") @db.Uuid
+  contatoId    String?  @map("contato_id") @db.Uuid
+  acao         String   @db.VarChar(100)
+  entidadeTipo String   @map("entidade_tipo") @db.VarChar(80)
+  entidadeId   String?  @map("entidade_id") @db.Uuid
+  antes        Json?    @db.JsonB
+  depois       Json?    @db.JsonB
+  motivo       String?  @db.Text
+  correlacaoId String   @map("correlacao_id") @db.Uuid
+
+  @@index([contatoId, criadoEm(sort: Desc)], map: "eventos_auditoria_contato_timeline_idx")
+  @@index([correlacaoId], map: "eventos_auditoria_correlacao_idx")
+  @@map("eventos_auditoria")
+}
+
 model Usuario {
-  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  criadoEm          DateTime           @default(now()) @map("criado_em") @db.Timestamptz(6)
-  nome              String             @db.VarChar(100)
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm            DateTime           @default(now()) @map("criado_em") @db.Timestamptz(6)
+  nome                String             @db.VarChar(100)
   // Unicidade normalizada garantida pelo índice usuarios_email_normalizado_unico (lower(trim(email))).
-  email             String             @db.VarChar(254)
+  email               String             @db.VarChar(254)
   // String PHC argon2id; a migration rejeita qualquer outro formato.
-  senhaHash         String             @map("senha_hash")
-  perfil            String             @db.VarChar(20)
-  ativo             Boolean            @default(true)
-  senhaAlteradaEm   DateTime           @default(now()) @map("senha_alterada_em") @db.Timestamptz(6)
-  criadoPorId       String?            @map("criado_por") @db.Uuid
-  atualizadoEm      DateTime           @default(now()) @map("atualizado_em") @db.Timestamptz(6)
-  versao            Int                @default(1)
-  criadoPor         Usuario?           @relation("UsuarioCriadoPor", fields: [criadoPorId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "usuarios_criado_por_fkey")
-  usuariosCriados   Usuario[]          @relation("UsuarioCriadoPor")
-  sessoes           Sessao[]
-  tentativasLogin   TentativaLogin[]
-  tokensRecuperacao TokenRecuperacao[]
+  senhaHash           String             @map("senha_hash")
+  perfil              String             @db.VarChar(20)
+  ativo               Boolean            @default(true)
+  senhaAlteradaEm     DateTime           @default(now()) @map("senha_alterada_em") @db.Timestamptz(6)
+  criadoPorId         String?            @map("criado_por") @db.Uuid
+  atualizadoEm        DateTime           @default(now()) @map("atualizado_em") @db.Timestamptz(6)
+  versao              Int                @default(1)
+  criadoPor           Usuario?           @relation("UsuarioCriadoPor", fields: [criadoPorId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "usuarios_criado_por_fkey")
+  usuariosCriados     Usuario[]          @relation("UsuarioCriadoPor")
+  sessoes             Sessao[]
+  tentativasLogin     TentativaLogin[]
+  tokensRecuperacao   TokenRecuperacao[]
+  contatosResponsavel Contato[]          @relation("ContatoResponsavel")
+  contatosCriados     Contato[]          @relation("ContatoCriadoPor")
+
+  interacoes              Interacao[]
+  respostasContato        RespostaContato[]
+  preferenciasComunicacao PreferenciaComunicacao[]
 
   @@index([criadoPorId], map: "usuarios_criado_por_idx")
   @@map("usuarios")
@@ -141,4 +168,94 @@ model TokenRecuperacao {
   // O índice único parcial tokens_recuperacao_um_ativo_por_usuario fica só na migration (Prisma não modela índice parcial).
   @@index([usuarioId, expiraEm], map: "tokens_recuperacao_usuario_expira_em_idx")
   @@map("tokens_recuperacao")
+}
+
+model Contato {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm        DateTime      @default(now()) @map("criado_em") @db.Timestamptz(6)
+  tipoPessoa      String        @map("tipo_pessoa") @db.Char(2)
+  nome            String        @db.VarChar(180)
+  // Trigger normaliza lower(trim(email)) e transforma vazio em NULL antes do UNIQUE.
+  email           String?       @unique(map: "contatos_email_unico") @db.VarChar(254)
+  telefone        String?       @db.VarChar(11)
+  documento       String?       @unique(map: "contatos_documento_unico") @db.VarChar(14)
+  origemId        String        @map("origem_id") @db.Uuid
+  classificacao   String        @db.VarChar(10)
+  etapaCaptacaoId String        @map("etapa_captacao_id") @db.Uuid
+  responsavelId   String        @map("responsavel_id") @db.Uuid
+  dataCadastro    DateTime      @map("data_cadastro") @db.Timestamptz(6)
+  criadoPorId     String        @map("criado_por") @db.Uuid
+  atualizadoEm    DateTime      @default(now()) @map("atualizado_em") @db.Timestamptz(6)
+  excluidoEm      DateTime?     @map("excluido_em") @db.Timestamptz(6)
+  versao          Int           @default(1)
+  origem          Origem        @relation(fields: [origemId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "contatos_origem_id_fkey")
+  etapaCaptacao   EtapaCaptacao @relation(fields: [etapaCaptacaoId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "contatos_etapa_captacao_id_fkey")
+  responsavel     Usuario       @relation("ContatoResponsavel", fields: [responsavelId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "contatos_responsavel_id_fkey")
+  criadoPor       Usuario       @relation("ContatoCriadoPor", fields: [criadoPorId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "contatos_criado_por_fkey")
+
+  interacoes              Interacao[]
+  respostasContato        RespostaContato[]
+  preferenciasComunicacao PreferenciaComunicacao[]
+
+  @@index([responsavelId, dataCadastro], map: "contatos_responsavel_data_cadastro_idx")
+  @@index([origemId, classificacao], map: "contatos_origem_classificacao_idx")
+  @@index([etapaCaptacaoId], map: "contatos_etapa_captacao_idx")
+  @@index([criadoPorId], map: "contatos_criado_por_idx")
+  @@map("contatos")
+}
+
+model Interacao {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm   DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
+  contatoId  String   @map("contato_id") @db.Uuid
+  canal      String   @db.VarChar(20)
+  ocorridoEm DateTime @map("ocorrido_em") @db.Timestamptz(6)
+  resumo     String   @db.VarChar(3000)
+  autorId    String   @map("autor_id") @db.Uuid
+  contato    Contato  @relation(fields: [contatoId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  autor      Usuario  @relation(fields: [autorId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([contatoId, ocorridoEm], map: "interacoes_contato_ocorrido_idx")
+  @@index([autorId], map: "interacoes_autor_idx")
+  @@map("interacoes")
+}
+
+model RespostaContato {
+  id                  String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm            DateTime                 @default(now()) @map("criado_em") @db.Timestamptz(6)
+  contatoId           String                   @map("contato_id") @db.Uuid
+  classificacao       String                   @db.VarChar(20)
+  conteudo            String                   @db.VarChar(3000)
+  // Adicionar a FK quando envio_destinatarios existir.
+  envioDestinatarioId String?                  @map("envio_destinatario_id") @db.Uuid
+  autorId             String                   @map("autor_id") @db.Uuid
+  contato             Contato                  @relation(fields: [contatoId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  autor               Usuario                  @relation(fields: [autorId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  preferencias        PreferenciaComunicacao[]
+
+  @@index([contatoId, criadoEm], map: "respostas_contato_timeline_idx")
+  @@index([autorId], map: "respostas_contato_autor_idx")
+  @@map("respostas_contato")
+}
+
+model PreferenciaComunicacao {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm     DateTime         @default(now()) @map("criado_em") @db.Timestamptz(6)
+  contatoId    String           @map("contato_id") @db.Uuid
+  canal        String           @db.VarChar(10)
+  situacao     String           @db.VarChar(15)
+  vigenteDesde DateTime         @map("vigente_desde") @db.Timestamptz(6)
+  vigenteAte   DateTime?        @map("vigente_ate") @db.Timestamptz(6)
+  motivo       String?
+  respostaId   String?          @map("resposta_id") @db.Uuid
+  autorId      String?          @map("autor_id") @db.Uuid
+  contato      Contato          @relation(fields: [contatoId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  resposta     RespostaContato? @relation(fields: [respostaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  autor        Usuario?         @relation(fields: [autorId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  // Índice único parcial e exclusão de períodos sobrepostos definidos na migration.
+  @@index([contatoId, canal, vigenteDesde], map: "preferencias_contato_canal_desde_idx")
+  @@index([respostaId], map: "preferencias_resposta_idx")
+  @@index([autorId], map: "preferencias_autor_idx")
+  @@map("preferencias_comunicacao")
 }

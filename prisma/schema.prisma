@@ -109,6 +109,7 @@ model Usuario {
   tokensRecuperacao   TokenRecuperacao[]
   contatosResponsavel Contato[]          @relation("ContatoResponsavel")
   contatosCriados     Contato[]          @relation("ContatoCriadoPor")
+  idempotencias       RequisicaoIdempotente[]
 
   interacoes              Interacao[]
   respostasContato        RespostaContato[]
@@ -116,6 +117,24 @@ model Usuario {
 
   @@index([criadoPorId], map: "usuarios_criado_por_idx")
   @@map("usuarios")
+}
+
+model RequisicaoIdempotente {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm       DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
+  usuarioId      String   @map("usuario_id") @db.Uuid
+  operacao       String   @db.VarChar(100)
+  chave          String   @db.Uuid
+  hashRequisicao String   @map("hash_requisicao") @db.Char(64)
+  estado         String   @db.VarChar(15)
+  recursoId      String?  @map("recurso_id") @db.Uuid
+  resposta       Json?    @db.JsonB
+  expiraEm       DateTime @map("expira_em") @db.Timestamptz(6)
+  usuario        Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "requisicoes_idempotentes_usuario_id_fkey")
+
+  @@unique([usuarioId, operacao, chave], map: "requisicoes_idempotentes_usuario_operacao_chave_unico")
+  @@index([expiraEm], map: "requisicoes_idempotentes_expira_em_idx")
+  @@map("requisicoes_idempotentes")
 }
 
 model Sessao {

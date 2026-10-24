@@ -11,7 +11,9 @@ npm.cmd ci
 npm.cmd run dev
 ```
 
-O frontend continua funcionando sem conexão com o banco. Para usar Prisma, copie `.env.example` para `.env` e informe a URL do PostgreSQL em `DATABASE_URL`.
+A interface carrega sem conexão com o banco, mas o login exige PostgreSQL acessível. Copie `.env.example` para `.env`, informe `DATABASE_URL` e aplique as migrations antes de autenticar usuários.
+
+Para criar o primeiro acesso administrativo, defina `BOOTSTRAP_ADMIN_NAME`, `BOOTSTRAP_ADMIN_EMAIL` e `BOOTSTRAP_ADMIN_PASSWORD` no ambiente (a senha deve ter pelo menos 12 caracteres) e execute `npm run db:bootstrap-admin`. O comando só funciona quando a tabela `usuarios` está vazia, armazena senha com Argon2id e registra o provisionamento na auditoria. Não armazene essas variáveis no repositório; remova-as do ambiente após o uso. Para uma conta já existente, não execute o bootstrap.
 
 ## Banco de dados e Prisma
 
@@ -53,6 +55,13 @@ Os modelos `Usuario` (`usuarios`), `Sessao` (`sessoes`) e `TentativaLogin` (`ten
 - **Usuários e senhas em Argon2id (formato PHC)**: `usuarios` exige e-mail único normalizado por índice funcional (`lower(trim(email))`), perfil restrito a `'administrador'` ou `'operador_captacao'`, controle de concorrência otimista (`versao > 0`) e atualização automática de `atualizado_em` via trigger. A coluna `senha_hash` possui `CHECK` constraint que aceita exclusivamente strings no formato PHC do algoritmo `argon2id` (`^\$argon2id\$v=19\$m=[0-9]+,t=[0-9]+,p=[0-9]+\$[A-Za-z0-9+/]{11,}\$[A-Za-z0-9+/]{16,}$`), impedindo a gravação acidental de senhas em texto puro ou hashes fora do padrão.
 - **Sessões revogáveis**: `sessoes` referencia `usuarios(id)` com `ON DELETE RESTRICT`, controla validade temporal (`expira_em > criado_em`, `ultimo_acesso_em >= criado_em`, `revogada_em >= criado_em`) e armazena em `token_hash` exclusivamente o hash SHA-256 em hexadecimal minúsculo de 64 caracteres (`^[0-9a-f]{64}$`), nunca o token bruto enviado ao navegador.
 - **Tentativas de login**: `tentativas_login` registra `identificador_hash` também restrito a SHA-256 hexadecimal de 64 caracteres (calculado sobre `lower(trim(email))`), `ip` (`INET`), `sucesso` e janela de bloqueio (`bloqueado_ate > criado_em`, proibida quando `sucesso = TRUE`).
+
+### Login e sessão no servidor (PB-001)
+
+- `POST /api/auth/login` valida credenciais Argon2id, registra tentativas e eventos de auditoria; a quinta falha consecutiva para o mesmo e-mail/IP inicia bloqueio de 1 minuto.
+- O login bem-sucedido cria uma sessão revogável, persiste somente o SHA-256 do token e envia o token em cookie `HttpOnly`, `SameSite=Lax` e `Secure` em produção.
+- `GET /api/auth/session` valida a sessão e `PUT /api/auth/session` registra atividade; após 30 minutos sem atividade, a sessão é revogada. `POST /api/auth/logout` revoga a sessão.
+- O perfil retornado pelo servidor direciona administradores à visão geral e operadores ao funil de captação. Configure `DATABASE_URL` e aplique as migrations para habilitar o fluxo.
 
 ### Tokens de recuperação de senha (PB-053)
 
@@ -110,16 +119,7 @@ npm.cmd run build
 npm.cmd start
 ```
 
-A aplicação cria os seguintes acessos padrão quando não há usuários no armazenamento local:
-
-| Perfil | E-mail | Senha |
-| --- | --- | --- |
-| Administrador | `admin@luz.exemplo` | `Esperanca@2026` |
-| Operador de Captação | `operador@luz.exemplo` | `Esperanca@2026` |
-
-Recarregue a página para criar os acessos, inclusive em navegadores que já tenham o estado salvo sem usuários. Contas existentes e suas senhas são preservadas. O administrador entra no painel administrativo; o operador entra no funil de captação.
-
-Os demais dados iniciam vazios. O armazenamento usa a chave `luz-crm-v1`, separada dos dados antigos. A autenticação é local, apenas para o protótipo, com senhas armazenadas por hash; não há cadastro público nem integração com servidor de autenticação. E-mails e recuperação de senha ainda usam os fluxos locais existentes, sem entrega real.
+Contas devem estar cadastradas em `usuarios` com senha Argon2id antes do primeiro acesso. A autenticação e as sessões são validadas no servidor; os demais dados operacionais da interface continuam no armazenamento local `luz-crm-v1`. Fluxos de e-mail permanecem simulados.
 
 ## Estrutura
 

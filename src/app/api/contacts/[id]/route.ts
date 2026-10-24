@@ -4,6 +4,7 @@ import { recordAuditEvent } from "@/lib/audit-service.ts";
 import type { CRMState, User } from "@/types/crm.ts";
 import { randomUUID } from "node:crypto";
 import { withIdempotency } from "@/lib/idempotency-service.ts";
+import { getActiveSession, SESSION_COOKIE } from "@/lib/auth-service.ts";
 
 /**
  * DELETE /api/contacts/[id]
@@ -16,18 +17,50 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  const body = await (
-    typeof request.clone === "function" ? request.clone() : request
-  )
-    .json()
-    .catch(() => ({}));
-  const requestedUserId =
-    typeof body?.user?.id === "string" ? body.user.id : "";
+  let authenticatedUser;
+  try {
+    authenticatedUser = await getActiveSession(
+      request.cookies.get(SESSION_COOKIE)?.value,
+      true,
+    );
+  } catch (error) {
+    console.error("Falha ao validar a sessão para excluir contato.", error);
+    return NextResponse.json(
+      { error: "Não foi possível validar sua sessão." },
+      { status: 500 },
+    );
+  }
+  if (!authenticatedUser) {
+    return NextResponse.json(
+      { error: "Sua sessão expirou. Entre novamente." },
+      { status: 401 },
+    );
+  }
+
+  let body: { state?: CRMState } | null;
+  try {
+    body = await request.clone().json();
+  } catch {
+    return NextResponse.json(
+      { error: "Requisição inválida." },
+      { status: 400 },
+    );
+  }
+  const user: User = {
+    id: authenticatedUser.id,
+    name: authenticatedUser.name,
+    email: authenticatedUser.email,
+    role:
+      authenticatedUser.profile === "administrador"
+        ? "Administrador"
+        : "Operador de Captação",
+    active: true,
+  };
 
   return withIdempotency(
     request,
     {
-      userId: requestedUserId,
+      userId: authenticatedUser.id,
       operation: `DELETE:/api/contacts/${id}`,
     },
     async (transaction) => {
@@ -40,12 +73,11 @@ export async function DELETE(
           ? requestedCorrelationId
           : randomUUID();
       try {
-        const state: CRMState = body.state;
-        const user: User = body.user;
+        const state = body?.state;
 
-        if (!state || !user) {
+        if (!state) {
           return NextResponse.json(
-            { error: "Estado ou usuário não fornecido." },
+            { error: "Estado não fornecido." },
             { status: 400 },
           );
         }

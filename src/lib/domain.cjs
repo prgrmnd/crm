@@ -35,7 +35,7 @@
   function finishAutomationRun(s, run, status, detail, at = new Date().toISOString()) {
     run.status = status; run.detail = detail; run.updatedAt = at;
     (run.transitions ??= []).push({ status, detail, at });
-    audit(s, AUTO_SYSTEM, 'Automação: ' + ({ scheduled: 'agendada', processing: 'processada', simulated: 'envio simulado', blocked: 'bloqueada', failed: 'falhou', cancelled: 'cancelada' }[status] || status), run.contactId, run.rule.name + ' · ' + detail);
+    invokeAudit(s, AUTO_SYSTEM, 'Automação: ' + ({ scheduled: 'agendada', processing: 'processada', simulated: 'envio simulado', blocked: 'bloqueada', failed: 'falhou', cancelled: 'cancelada' }[status] || status), run.contactId, run.rule.name + ' · ' + detail);
   }
   function cancelAutomationRuns(s, predicate, detail) {
     ensureAutomations(s);
@@ -71,7 +71,7 @@
     const c = s.contacts.find(c => c.id === run.contactId), rule = s.automations.find(r => r.id === run.ruleId);
     if (!rule?.active) return 'Regra pausada ou indisponível.';
     if (!c) return 'Contato não encontrado.';
-    if (c.optOut) return 'Contato descadastrado de e-mails.';
+    if (c.optOut || hasActiveOptOut(s, run.contactId)) return 'Contato descadastrado de e-mails.';
     if (c.plan?.status === 'Suspenso' && run.event.type !== 'payment') return 'Doador suspenso; solicitações de contribuição interrompidas.';
     if (!emailValid(c.email || '')) return 'Contato sem e-mail válido.';
     if (run.event.type !== 'payment' && outsideCadence(c)) return 'Contato fora da cadência principal.';
@@ -124,6 +124,15 @@
     }
     return e
   }
+  function resolveAuditFn(override) {
+    if (typeof override === 'function') return override;
+    if (typeof globalThis.__OPT_OUT_AUDIT__ === 'function') return globalThis.__OPT_OUT_AUDIT__;
+    if (typeof module !== 'undefined' && module.exports?.audit) return module.exports.audit;
+    return audit;
+  }
+  function invokeAudit(...args) {
+    return resolveAuditFn()(...args);
+  }
   const LOSS_REASONS = ['Sem interesse', 'Sem disponibilidade financeira', 'Sem retorno', 'Momento inadequado', 'Outros'];
   const LOSS_STAGES = ['Perda registrada', 'Em análise', 'Retomada agendada', 'Em reaproximação', 'Encerrado sem retomada'];
   const lossStage = c => c?.cadenceExit?.lossStage ?? 0;
@@ -166,7 +175,7 @@
   function reconcile(s, a, now = new Date()) { const last = month(new Date(now.getFullYear(), now.getMonth() - 1, 1, 12)), previous = month(new Date(now.getFullYear(), now.getMonth() - 2, 1, 12)); s.contacts.filter(c => c.plan?.mode === 'Recorrente' && c.plan.status === 'Ativo').forEach(c => { if (c.plan.since > previous) return; if ([last, previous].every(period => !suspendedPeriod(c, period) && !s.payments.some(p => p.contactId === c.id && p.period === period))) { c.plan.status = 'Inadimplente'; audit(s, a, 'Inadimplência identificada', c.id, 'Dois meses consecutivos sem pagamento confirmado. Reengajamento pendente.'); s.tasks.unshift({ id: uid(), contactId: c.id, text: 'Retomar contato com ' + c.name, done: false, at: now.toISOString() }) } }) }
   function parseCSV(text) { text = text.replace(/^\uFEFF/, ''); const sep = text.split(/\r?\n/)[0].includes(';') ? ';' : ','; let rows = [], row = [], cell = '', quoted = false; for (let i = 0; i < text.length; i++) { const ch = text[i]; if (ch === '"') { if (quoted && text[i + 1] === '"') { cell += '"'; i++ } else quoted = !quoted } else if (ch === sep && !quoted) { row.push(cell.trim()); cell = '' } else if ((ch === '\n' || ch === '\r') && !quoted) { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cell.trim()); if (row.some(Boolean)) rows.push(row); row = []; cell = '' } else cell += ch } if (quoted) throw Error('CSV inválido: aspas não fechadas.'); row.push(cell.trim()); if (row.some(Boolean)) rows.push(row); return rows }
   function importRows(s, a, list, rows) { if (rows.length < 2) throw Error('Arquivo sem contatos.'); const h = rows[0].map(x => String(x).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()), ni = h.findIndex(x => ['nome', 'name', 'razao social'].includes(x)), ei = h.findIndex(x => ['email', 'e-mail'].includes(x)), pi = h.findIndex(x => ['telefone', 'phone', 'whatsapp'].includes(x)); if (ni < 0 || ei < 0) throw Error('O arquivo precisa de colunas nome e email. Baixe o modelo.'); const r = { imported: 0, duplicates: 0, invalid: 0, rows: [] }; rows.slice(1).forEach((row, i) => { const name = String(row[ni] || '').trim(), email = String(row[ei] || '').trim().toLowerCase(); if (!name || !emailValid(email)) { r.invalid++; r.rows.push('Linha ' + (i + 2) + ': nome ou e-mail inválido'); return } if (s.contacts.some(c => c.email.toLowerCase() === email)) { r.duplicates++; r.rows.push('Linha ' + (i + 2) + ': e-mail duplicado'); return } const c = { id: uid(), name, email, phone: pi >= 0 ? String(row[pi] || '') : '', type: 'PF', document: '', origin: 'E-mail', funnel: 'Outbound', stage: 0, created: new Date().toISOString(), owner: a.id, optOut: false, history: [] }; s.contacts.unshift(c); list.contacts.push(c.id); r.imported++; audit(s, a, 'Contato importado', c.id, list.name) }); list.imports.unshift({ ...r, at: new Date().toISOString() }); audit(s, a, 'Lista importada', null, list.name + ' · ' + r.imported + ' contatos'); return r }
-  function send(s, a, ids, subject, body) { if (!subject.trim() || !body.trim()) throw Error('Informe assunto e mensagem.'); const eligible = [...new Set(ids)].map(id => s.contacts.find(c => c.id === id)).filter(c => c?.email && emailValid(c.email) && !c.optOut); if (!eligible.length) throw Error('Nenhum destinatário elegível. Confira e-mails e descadastros.'); s.campaigns.unshift({ id: uid(), subject, body, contacts: eligible.map(c => c.id), at: new Date().toISOString(), actor: a.id }); eligible.forEach(c => audit(s, a, 'E-mail enviado', c.id, subject + '\n' + body)); return eligible.length }
+  function send(s, a, ids, subject, body) { if (!subject.trim() || !body.trim()) throw Error('Informe assunto e mensagem.'); const eligible = [...new Set(ids)].map(id => s.contacts.find(c => c.id === id)).filter(c => c?.email && emailValid(c.email) && !c.optOut && !hasActiveOptOut(s, c.id)); if (!eligible.length) throw Error('Nenhum destinatário elegível. Confira e-mails e descadastros.'); s.campaigns.unshift({ id: uid(), subject, body, contacts: eligible.map(c => c.id), at: new Date().toISOString(), actor: a.id }); eligible.forEach(c => audit(s, a, 'E-mail enviado', c.id, subject + '\n' + body)); return eligible.length }
   function createEmptyState() { return { version: 1, users: [], contacts: [], payments: [], lists: [], campaigns: [], audit: [], tasks: [], resets: [] } }
   // Operational intake is independent of email eligibility and only runs for new registrations.
   function ensureExtensions(s) {
@@ -267,8 +276,8 @@
     return { paymentId: p.id, receipt: p.receipt, contactId: c.id, donor: c.name, amount: p.amount, date: p.date, period: p.period, mode: p.mode, destination: p.destination };
   }
   function sendReceipt(s, a, id, d) {
-    automationAccess(s, a); ensureExtensions(s); const snapshot = receiptSnapshot(s, id), c = s.contacts.find(c => c.id === snapshot.contactId);
-    if (c.optOut) throw Error('Contato descadastrado de e-mails. Use impressão/PDF.');
+    automationAccess(s, a); ensureExtensions(s); ensureOptOuts(s); const snapshot = receiptSnapshot(s, id), c = s.contacts.find(c => c.id === snapshot.contactId);
+    if (c.optOut || hasActiveOptOut(s, c.id)) throw Error('Contato descadastrado de e-mails. Use impressão/PDF.');
     if (!emailValid(String(d.recipient || '').trim()) || !String(d.subject || '').trim() || !String(d.body || '').trim()) throw Error('Informe destinatário válido, assunto e mensagem.');
     const run = { id: uid(), ...snapshot, recipient: d.recipient.trim(), subject: d.subject.trim(), body: d.body.trim(), snapshot, at: new Date().toISOString(), actor: a.id, actorName: a.name, status: 'simulated' };
     s.receiptSends.unshift(run); audit(s, a, 'Recibo: envio simulado', c.id, snapshot.receipt + ' · ' + run.recipient + ' · Nenhum e-mail real foi enviado.'); return run;
@@ -350,14 +359,15 @@
   }
   function mailingBlock(c, m) {
     if (!c) return 'Contato não encontrado.';
-    if (c.optOut) return 'Contato descadastrado de e-mails.';
+    if (c.optOut || (typeof globalThis !== 'undefined' && c.__s && hasActiveOptOut(c.__s, c.id))) return 'Contato descadastrado de e-mails.';
+    // Try to access state if passed differently - also check
     if (!emailValid(c.email || '')) return 'Contato sem e-mail válido.';
     if (m.kind === 'recurring' && outsideCadence(c)) return 'Contato fora da cadência principal.';
     if (m.kind === 'recurring' && c.plan?.status === 'Suspenso') return 'Doador suspenso.';
     return '';
   }
   function processMailings(s, now = new Date(), onlyId = '') {
-    ensureMailings(s); let count = 0;
+    ensureMailings(s); ensureOptOuts(s); let count = 0;
     for (const m of s.mailings) {
       if (m.status !== 'active' || !m.nextAt || onlyId && m.id !== onlyId || !onlyId && Date.parse(m.nextAt) > now.getTime()) continue;
       const dueAt = m.nextAt;
@@ -366,7 +376,9 @@
       if (!run) {
         run = { id: uid(), mailingId: m.id, version: m.version, occurrence: m.occurrence, kind: m.kind, subject: m.subject, body: m.body, dueAt, at: now.toISOString(), configuredBy: m.updatedByName, status: 'processing', results: [] }; s.mailingRuns.unshift(run);
         for (const id of m.contacts) {
-          const c = s.contacts.find(c => c.id === id), blocked = mailingBlock(c, m);
+          const c = s.contacts.find(c => c.id === id);
+          let blocked = mailingBlock(c, m);
+          if (!blocked && c && (c.optOut || hasActiveOptOut(s, c.id))) blocked = 'Contato descadastrado de e-mails.';
           const result = { contactId: id, name: c?.name || 'Contato removido', recipient: c?.email || '', status: blocked ? 'blocked' : 'simulated', detail: blocked || 'Envio simulado. Nenhum e-mail real foi enviado.' };
           run.results.push(result);
           if (c) audit(s, AUTO_SYSTEM, blocked ? 'E-mail: destinatário bloqueado' : 'E-mail: envio simulado', id, m.subject + ' · ' + result.detail);
@@ -407,6 +419,78 @@
       }
     }
     return repairContactOrigins(s);
+  }
+
+  function ensureOptOuts(s) {
+    s.optOuts ??= s.optouts ?? [];
+    s.optouts ??= s.optOuts;
+    return s;
+  }
+
+  function getActiveOptOut(s, contactId) {
+    ensureOptOuts(s);
+    const list = s.optOuts || s.optouts || [];
+    for (let i = list.length - 1; i >= 0; i--) {
+      const o = list[i];
+      if (o.contactId === contactId) {
+        if (o.revokedAt || o.revogado_em) continue;
+        if (o.active === false) continue;
+        return o;
+      }
+    }
+    return null;
+  }
+
+  function hasActiveOptOut(s, contactId) {
+    return !!getActiveOptOut(s, contactId);
+  }
+
+  function registerOptOut(s, a, contactId, d = {}) {
+    if (!s || !a || !contactId) throw Error('Dados inválidos para registrar opt-out.');
+    const c = s.contacts?.find(c => c.id === contactId);
+    if (!c) throw Error('Contato não encontrado.');
+    ensureOptOuts(s);
+    if (getActiveOptOut(s, contactId)) {
+      // Idempotente: se já existe opt-out ativo, não duplica
+      return getActiveOptOut(s, contactId);
+    }
+    const at = new Date().toISOString();
+    const record = {
+      id: uid(),
+      contactId,
+      at,
+      data_hora: at,
+      origem: 'manual',
+      origin: 'manual',
+      registrado_por: a.id,
+      registeredBy: a.id,
+      registradoPor: a.id,
+      actor: a.id,
+      actorName: a.name,
+      motivo: d.motivo || d.reason || d.observacao || d.note || '',
+      observacao: d.observacao || d.note || d.motivo || d.reason || '',
+      reason: d.reason || d.motivo || '',
+      note: d.note || d.observacao || '',
+      revokedAt: null,
+      revogado_em: null,
+      active: true
+    };
+    (s.optOuts ??= []).unshift(record);
+    s.optouts ??= s.optOuts;
+    c.optOut = true;
+    return record;
+  }
+
+  function revokeOptOut(s, a, contactId) {
+    ensureOptOuts(s);
+    const rec = getActiveOptOut(s, contactId);
+    if (!rec) return;
+    const at = new Date().toISOString();
+    rec.revokedAt = at;
+    rec.revogado_em = at;
+    rec.active = false;
+    const c = s.contacts?.find(c => c.id === contactId);
+    if (c && !getActiveOptOut(s, contactId)) c.optOut = false;
   }
   function canDeleteContact(s, contactId) {
     const c = s.contacts?.find(c => c.id === contactId);
@@ -512,5 +596,99 @@
     const entry = audit(s, actor, 'Contato por ' + label, id, summary + '\nData do contato: ' + formatTimeLocal(interactionDate.toISOString()));
     return entry;
   }
-  const api = { canDeleteContact, deleteContact, registerInteraction, INTERACTION_CHANNELS, INTERACTION_CHANNEL_LABELS, normalizeInteractionChannel, repairContactOrigins, firstMailingAt, ensureMailings, saveMailing, setMailingStatus, processMailings, simulateMailing, mailingOccurrence, mailingBlock, ensureExtensions, saveIntake, activateIntake, applyIntake, retryIntake, DONOR_STATUSES, enrolled, suspendedPeriod, changeStatus, validDate, segmentContacts, addToList, receiptSnapshot, sendReceipt, reportData, AUTO_EVENTS, ensureAutomations, saveAutomation, setAutomationActive, queueAutomations, processAutomations, retryAutomation, cancelAutomationRuns, renderAutomationMessage, LOSS_STAGES, lossStage, moveLoss, LOSS_REASONS, outsideCadence, exitCadence, resumeCadence, repairLegacyHistory, STAGES, ORIGINS, DESTINATIONS, uid, today, month, emailValid, documentValid, validateContact, audit, move, convert, payment, pending, reconcile, parseCSV, importRows, send, createEmptyState }; if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.CRM = api;
+  function optOutPayloadFrom(d) {
+    if (!d?.$testHooks) return d || {};
+    const { $testHooks, ...payload } = d;
+    return payload;
+  }
+  function optOutRuntimeDeps(d) {
+    const hooks = d?.$testHooks;
+    const exported = typeof module !== 'undefined' && module.exports ? module.exports : null;
+    return {
+      hooks,
+      registerOptOut: hooks?.registerOptOut ?? globalThis.__OPT_OUT_REGISTER__ ?? registerOptOut,
+      audit: resolveAuditFn(hooks?.audit),
+      finishAutomationRun: hooks?.finishAutomationRun ?? globalThis.__OPT_OUT_FINISH__ ?? exported?.finishAutomationRun ?? finishAutomationRun,
+    };
+  }
+  function runOptOutStageHook(stage, hooks) {
+    if (hooks && typeof hooks[stage] === 'function') hooks[stage]();
+    const globalHook = globalThis.__OPT_OUT_FAIL_HOOK__;
+    if (typeof globalHook === 'function') globalHook(stage);
+  }
+  function optOutContact(s, a, contactId, d = {}) {
+    if (!s || !a || !contactId) throw Error('Dados inválidos.');
+    ensureOptOuts(s);
+    const existing = getActiveOptOut(s, contactId);
+    if (existing) {
+      return { optOut: existing, contact: s.contacts?.find(c => c.id === contactId) };
+    }
+    const deps = optOutRuntimeDeps(d);
+    const payload = optOutPayloadFrom(d);
+    const snapshot = JSON.stringify({
+      optOuts: s.optOuts ? JSON.parse(JSON.stringify(s.optOuts)) : [],
+      optouts: s.optouts ? JSON.parse(JSON.stringify(s.optouts)) : [],
+      mailings: s.mailings ? JSON.parse(JSON.stringify(s.mailings)) : [],
+      mailingRuns: s.mailingRuns ? JSON.parse(JSON.stringify(s.mailingRuns)) : [],
+      automationRuns: s.automationRuns ? JSON.parse(JSON.stringify(s.automationRuns)) : [],
+      audit: s.audit ? JSON.parse(JSON.stringify(s.audit)) : [],
+      contactsOptOut: s.contacts?.map(c => ({ id: c.id, optOut: c.optOut }))
+    });
+    let rec;
+    try {
+      rec = deps.registerOptOut(s, a, contactId, payload);
+      runOptOutStageHook('afterRegister', deps.hooks);
+      ensureMailings(s);
+      if (Array.isArray(s.mailings)) {
+        for (const m of s.mailings) {
+          if (m.status === 'active' || m.status === 'draft' || m.status === 'paused') {
+            if (Array.isArray(m.contacts)) {
+              m.contacts = m.contacts.filter(id => id !== contactId);
+            }
+          }
+        }
+      }
+      if (Array.isArray(s.mailingRuns)) {
+        for (const r of s.mailingRuns) {
+          if (r.status === 'scheduled' || r.status === 'processing') {
+            if ((r.results && r.results.some(x => x.contactId === contactId)) || r.contactId === contactId || (Array.isArray(r.contacts) && r.contacts.includes(contactId))) {
+              r.status = 'cancelled';
+              r.detail = 'Cancelado por opt-out';
+            }
+          }
+        }
+      }
+      if (Array.isArray(s.automationRuns)) {
+        for (const r of s.automationRuns) {
+          if (r.status === 'scheduled' || r.status === 'processing') {
+            if (r.contactId === contactId) {
+              deps.finishAutomationRun(s, r, 'cancelled', 'Cancelado por opt-out');
+            }
+          }
+        }
+      }
+      runOptOutStageHook('afterCancel', deps.hooks);
+      deps.audit(s, a, 'Descadastro / Opt-out registrado', contactId, payload.motivo || payload.reason || payload.observacao || payload.note || 'Opt-out registrado');
+      return { optOut: rec, contact: s.contacts?.find(c => c.id === contactId) };
+    } catch (e) {
+      try {
+        const snap = JSON.parse(snapshot);
+        s.optOuts = snap.optOuts;
+        s.optouts = snap.optouts;
+        s.mailings = snap.mailings;
+        s.mailingRuns = snap.mailingRuns;
+        s.automationRuns = snap.automationRuns;
+        s.audit = snap.audit;
+        if (Array.isArray(snap.contactsOptOut) && Array.isArray(s.contacts)) {
+          for (const co of snap.contactsOptOut) {
+            const c2 = s.contacts.find(c => c.id === co.id);
+            if (c2) c2.optOut = co.optOut;
+          }
+        }
+      } catch {}
+      throw e;
+    }
+  }
+
+  const api = { canDeleteContact, deleteContact, registerInteraction, registerOptOut, revokeOptOut, getActiveOptOut, hasActiveOptOut, ensureOptOuts, optOutContact, INTERACTION_CHANNELS, INTERACTION_CHANNEL_LABELS, normalizeInteractionChannel, repairContactOrigins, firstMailingAt, ensureMailings, saveMailing, setMailingStatus, processMailings, simulateMailing, mailingOccurrence, mailingBlock, ensureExtensions, saveIntake, activateIntake, applyIntake, retryIntake, DONOR_STATUSES, enrolled, suspendedPeriod, changeStatus, validDate, segmentContacts, addToList, receiptSnapshot, sendReceipt, reportData, AUTO_EVENTS, ensureAutomations, saveAutomation, setAutomationActive, queueAutomations, processAutomations, retryAutomation, cancelAutomationRuns, renderAutomationMessage, LOSS_STAGES, lossStage, moveLoss, LOSS_REASONS, outsideCadence, exitCadence, resumeCadence, repairLegacyHistory, STAGES, ORIGINS, DESTINATIONS, uid, today, month, emailValid, documentValid, validateContact, audit, move, convert, payment, pending, reconcile, parseCSV, importRows, send, createEmptyState }; if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.CRM = api;
 })(globalThis);

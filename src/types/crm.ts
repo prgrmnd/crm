@@ -127,6 +127,27 @@ export interface AuditEntry {
   details: string;
 }
 
+export interface OptOutRecord {
+  id: string;
+  contactId: string;
+  at: string;
+  data_hora?: string;
+  origem: "manual" | string;
+  origin?: string;
+  registrado_por?: string;
+  registeredBy?: string;
+  registradoPor?: string;
+  actor?: string;
+  actorName?: string;
+  motivo?: string;
+  observacao?: string;
+  reason?: string;
+  note?: string;
+  revokedAt?: string | null;
+  revogado_em?: string | null;
+  active?: boolean;
+}
+
 export interface CRMState {
   version: number;
   users: User[];
@@ -141,6 +162,8 @@ export interface CRMState {
   automationRuns?: unknown[];
   mailings?: unknown[];
   mailingRuns?: unknown[];
+  optOuts?: OptOutRecord[];
+  optouts?: OptOutRecord[];
 }
 
 export interface CanDeleteContactResult {

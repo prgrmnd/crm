@@ -6,14 +6,6 @@ const prisma = getPrismaClient();
 const rateLimit = new Map();
 
 export async function POST(request: NextRequest) {
-  const ip = request.headers.get("x-forwarded-for") || "127.0.0.1";
-  const now = Date.now();
-
-  if (rateLimit.has(ip) && now - rateLimit.get(ip) < 60000) {
-    return NextResponse.json({ error: "Muitas tentativas. Aguarde." }, { status: 429 });
-  }
-  rateLimit.set(ip, now);
-
   try {
     const body = await request.json();
     const email = body.email?.toLowerCase().trim();
@@ -22,25 +14,46 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "E-mail obrigatório" }, { status: 400 });
     }
 
-    const usuario = await prisma.usuario.findFirst({ where: { email } });
+    const ip = request.headers.get("x-forwarded-for") || "127.0.0.1";
+    const rateLimitKey = `${ip}:${email}`;
+    const now = Date.now();
+
+    if (rateLimit.has(rateLimitKey) && now - rateLimit.get(rateLimitKey) < 60000) {
+      return NextResponse.json({ error: "Muitas tentativas. Aguarde." }, { status: 429 });
+    }
+    rateLimit.set(rateLimitKey, now);
+
+    const usuario = await prisma.usuario.findFirst({
+      where: {
+        email: { equals: email, mode: "insensitive" },
+        ativo: true,
+      },
+    });
 
     if (usuario) {
       const token = crypto.randomBytes(32).toString('hex');
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-      const expiracao = new Date(Date.now() + 15 * 60 * 1000);
+      const agora = new Date();
+      const expiracao = new Date(agora.getTime() + 15 * 60 * 1000);
 
-      await prisma.tokenRecuperacao.updateMany({
-        where: { usuarioId: usuario.id },
-        data: { invalidadoEm: new Date() }
-      });
-
-     await prisma.tokenRecuperacao.create({
-  data: {
-    tokenHash: tokenHash,
-    usuarioId: usuario.id,
-    expiraEm: expiracao
-  }
-});
+      await prisma.$transaction([
+        prisma.tokenRecuperacao.updateMany({
+          where: {
+            usuarioId: usuario.id,
+            consumidoEm: null,
+            invalidadoEm: null,
+          },
+          data: { invalidadoEm: agora },
+        }),
+        prisma.tokenRecuperacao.create({
+          data: {
+            usuarioId: usuario.id,
+            tokenHash,
+            criadoEm: agora,
+            expiraEm: expiracao,
+          },
+        }),
+      ]);
 
       console.log(`[BACKEND E-MAIL] Recuperação para: ${email} | Token (Link): ${token}`);
     }
@@ -50,7 +63,7 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
 
-} catch (error) {
+  } catch (error) {
     console.error("ERRO DETALHADO:", error);
     return NextResponse.json({ error: "Erro interno no servidor" }, { status: 500 });
   }

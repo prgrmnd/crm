@@ -4,6 +4,7 @@ import type {
   CRMState,
   User,
 } from "../types/crm";
+import D from "./domain.cjs";
 
 /**
  * Checks whether a contact is eligible for deletion.
@@ -35,6 +36,85 @@ export function canDeleteContact(
   }
 
   return { allowed: true };
+}
+
+export function hasActiveOptOut(state: CRMState, contactId: string): boolean {
+  try {
+    if ((D as any).hasActiveOptOut) return (D as any).hasActiveOptOut(state, contactId);
+    if ((D as any).getActiveOptOut) return !!(D as any).getActiveOptOut(state, contactId);
+  } catch {}
+  const list: any[] = (state as any).optOuts || (state as any).optouts || [];
+  for (let i = list.length - 1; i >= 0; i--) {
+    const o = list[i];
+    if (o.contactId === contactId) {
+      if (o.revokedAt || o.revogado_em) continue;
+      if (o.active === false) continue;
+      return true;
+    }
+  }
+  const c = state.contacts?.find((c: any) => c.id === contactId);
+  return !!(c as any)?.optOut;
+}
+
+export function registerOptOut(
+  state: CRMState,
+  user: User,
+  contactId: string,
+  data: any = {},
+): any {
+  try {
+    if ((D as any).optOutContact) {
+      const res = (D as any).optOutContact(state, user, contactId, data);
+      return res?.optOut || res;
+    }
+    if ((D as any).registerOptOut) {
+      return (D as any).registerOptOut(state, user, contactId, data);
+    }
+  } catch (e) {
+    throw e;
+  }
+  const at = new Date().toISOString();
+  const rec: any = {
+    id: (globalThis as any).crypto?.randomUUID?.() || "opt-" + Date.now().toString(36),
+    contactId,
+    at,
+    data_hora: at,
+    origem: "manual",
+    origin: "manual",
+    registrado_por: user.id,
+    registeredBy: user.id,
+    registradoPor: user.id,
+    actor: user.id,
+    actorName: user.name,
+    motivo: data.motivo || data.reason || "",
+    observacao: data.observacao || "",
+    revokedAt: null,
+    revogado_em: null,
+    active: true,
+  };
+  (state as any).optOuts = (state as any).optOuts || [];
+  (state as any).optOuts.unshift(rec);
+  const c = state.contacts?.find((c: any) => c.id === contactId);
+  if (c) (c as any).optOut = true;
+  // audit
+  const auditEntry: any = {
+    id: (globalThis as any).crypto?.randomUUID?.() || "id-" + Date.now().toString(36) + Math.random().toString(36).slice(2),
+    at,
+    actor: user.id,
+    actorName: user.name,
+    action: "Descadastro / Opt-out registrado",
+    contactId,
+    details: data.motivo || data.reason || "Opt-out registrado",
+  };
+  state.audit = state.audit || [];
+  state.audit.unshift(auditEntry);
+  // cancel mailings
+  if ((state as any).mailings) {
+    for (const m of (state as any).mailings) {
+      if (Array.isArray(m.contacts)) m.contacts = m.contacts.filter((id: string) => id !== contactId);
+    }
+  }
+  return rec;
 }
 
 /**

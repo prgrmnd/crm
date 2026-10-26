@@ -4,7 +4,7 @@ import { canDeleteContact, deleteContact } from "./contact-service";
 export function createCRMController(model) {
   const { view, runtime } = model;
   const KEY = "luz-crm-v1",
-    SESSION = "luz-crm-session-v2";
+    SESSION_TOUCH_INTERVAL = 60 * 1000;
   const $ = (s, r = view) => r.find(s),
     $$ = (s, r = view) => r.findAll(s);
   const THEME_KEY = "luz-crm-theme";
@@ -177,8 +177,7 @@ export function createCRMController(model) {
     financeTab = "payments",
     contactPage = 1,
     lastActivity = Date.now(),
-    loginAttempts = 0,
-    lockUntil = 0;
+    lastSessionTouch = 0;
   function save() {
     D.processAutomations(state);
     D.processMailings(state);
@@ -231,25 +230,31 @@ export function createCRMController(model) {
       throw Error("Esta ação exige perfil de Administrador.");
   }
   function activeUser() {
-    if (!user || !state.users.some((u) => u.id === user.id && u.active))
+    if (!user)
       throw Error("Sua sessão foi encerrada. Entre novamente.");
     if (Date.now() - lastActivity > 30 * 60 * 1000) {
       logout();
       throw Error("Sessão encerrada por inatividade.");
     }
     lastActivity = Date.now();
-    sessionStorage.setItem(
-      SESSION,
-      JSON.stringify({ id: user.id, last: lastActivity }),
-    );
   }
   function logout(message) {
+    const hadSession = Boolean(user);
     selectedContacts.clear();
-    sessionStorage.removeItem(SESSION);
     user = null;
     closeModal();
     render();
     if (message) toast(message);
+    if (hadSession) {
+      fetch("/api/auth/logout", { method: "POST" })
+        .then((response) => {
+          if (!response.ok)
+            toast("Não foi possível revogar a sessão no servidor.", "error");
+        })
+        .catch(() =>
+          toast("Não foi possível contatar o servidor para revogar a sessão.", "error"),
+        );
+    }
   }
   function navigate(next) {
     if (next === "automations") next = "emails";
@@ -1172,7 +1177,16 @@ export function createCRMController(model) {
     );
   }
   function emailEligible(c) {
-    return Boolean(c?.email && D.emailValid(c.email) && !c.optOut);
+    if (!c) return false;
+    let hasOptOut = !!c.optOut;
+    try {
+      if (typeof D.getActiveOptOut === "function") {
+        hasOptOut = hasOptOut || !!D.getActiveOptOut(state, c.id);
+      } else if (D.hasActiveOptOut) {
+        hasOptOut = hasOptOut || D.hasActiveOptOut(state, c.id);
+      }
+    } catch {}
+    return Boolean(c?.email && D.emailValid(c.email) && !hasOptOut);
   }
   function cleanContactSelection() {
     selectedContacts = new Set(
@@ -1389,9 +1403,8 @@ export function createCRMController(model) {
     );
   }
   function renderLogin() {
-    const token = new URLSearchParams(location.hash.slice(1)).get("redefinir");
     $("#app").markup =
-      `<div class="login"><section class="login-story">${brand()}<div><div class="eyebrow" style="margin-top:50px">Relacionamentos que transformam</div><h1>A esperança floresce quando cuidamos dos nossos laços.</h1><p>Um espaço para acolher, cultivar relacionamentos e acompanhar cada gesto de generosidade.</p><div class="art">${art()}</div></div><footer>Centro Espírita e Obras Sociais · Parnaíba, PI</footer></section><section class="login-content"><div class="login-theme">${themeButton()}</div><div class="login-form"><div class="eyebrow">Bem-vindo ao nosso espaço</div><h2>${token ? "Uma nova senha" : "Que bom ter você aqui."}</h2><p>${token ? "Escolha uma senha para voltar a cuidar dos nossos laços." : "Entre para acompanhar os relacionamentos e contribuições da nossa comunidade."}</p><form id="auth-form"><div class="error" role="alert"></div>${token ? field("Nova senha", "password", "", "password", 'required minlength="8" autocomplete="new-password"') + field("Confirme a nova senha", "confirm", "", "password", 'required minlength="8" autocomplete="new-password"') : field("Seu e-mail", "email", "", "email", 'required autocomplete="username"') + field("Sua senha", "password", "", "password", 'required autocomplete="current-password"')}<button class="btn" type="submit">${token ? "Salvar nova senha" : "Entrar no nosso espaço"} ${icon("arrow")}</button></form>${token ? "" : `<div style="text-align:right;margin-top:14px"><button class="text-link" data-action="recover">Esqueci minha senha</button></div>`}</div></section></div>`;
+      `<div class="login"><section class="login-story">${brand()}<div><div class="eyebrow" style="margin-top:50px">Relacionamentos que transformam</div><h1>A esperança floresce quando cuidamos dos nossos laços.</h1><p>Um espaço para acolher, cultivar relacionamentos e acompanhar cada gesto de generosidade.</p><div class="art">${art()}</div></div><footer>Centro Espírita e Obras Sociais · Parnaíba, PI</footer></section><section class="login-content"><div class="login-theme">${themeButton()}</div><div class="login-form"><div class="eyebrow">Bem-vindo ao nosso espaço</div><h2>Que bom ter você aqui.</h2><p>Entre para acompanhar os relacionamentos e contribuições da nossa comunidade.</p><form id="auth-form"><div class="error" role="alert"></div>${field("Seu e-mail", "email", "", "email", 'required autocomplete="username"')}${field("Sua senha", "password", "", "password", 'required autocomplete="current-password"')}<button class="btn" type="submit">Entrar no nosso espaço ${icon("arrow")}</button></form></div></section></div>`;
     $("#auth-form").onsubmit = async (e) => {
       e.preventDefault();
       const f = e.currentTarget,
@@ -1399,49 +1412,38 @@ export function createCRMController(model) {
       btn.disabled = true;
       try {
         const d = Object.fromEntries(runtime.formEntries(f));
-        if (token) {
-          const r = state.resets.find(
-            (r) => r.token === token && !r.used && r.expires > Date.now(),
-          );
-          if (!r)
-            throw Error(
-              "Link de recuperação inválido ou expirado. Solicite outro.",
-            );
-          if (d.password !== d.confirm)
-            throw Error("As senhas precisam ser iguais.");
-          const u = state.users.find((u) => u.id === r.userId);
-          Object.assign(u, await credentials(d.password));
-          r.used = true;
-          D.audit(state, u, "Senha redefinida", null, "Recuperação de acesso");
-          save();
-          location.hash = "";
-          renderLogin();
-          toast("Senha redefinida. Você já pode entrar.");
-          return;
-        }
-        if (Date.now() < lockUntil)
-          throw Error("Aguarde um minuto antes de tentar novamente.");
-        const u = state.users.find(
-          (u) =>
-            u.email.toLowerCase() === d.email.trim().toLowerCase() && u.active,
-        );
-        if (!u || (await hashPassword(d.password, u.salt)) !== u.passwordHash) {
-          loginAttempts++;
-          if (loginAttempts >= 5) {
-            lockUntil = Date.now() + 60000;
-            loginAttempts = 0;
-          }
-          throw Error("E-mail ou senha inválidos, ou usuário inativo.");
-        }
-        user = u;
-        loginAttempts = 0;
+        const response = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: d.email, password: d.password }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw Error(result.error || "Não foi possível entrar.");
+        const account = result.user;
+        if (
+          !account ||
+          typeof account.id !== "string" ||
+          typeof account.name !== "string" ||
+          typeof account.email !== "string" ||
+          !["administrador", "operador_captacao"].includes(account.profile)
+        )
+          throw Error("O servidor retornou um perfil de acesso inválido.");
+        user = {
+          id: account.id,
+          name: account.name,
+          email: account.email,
+          role:
+            account.profile === "administrador"
+              ? "Administrador"
+              : "Operador de Captação",
+          active: true,
+        };
+        const savedUser = state.users.find((u) => u.id === user.id);
+        if (savedUser) Object.assign(savedUser, user);
+        else state.users.push({ ...user });
         lastActivity = Date.now();
-        sessionStorage.setItem(
-          SESSION,
-          JSON.stringify({ id: u.id, last: lastActivity }),
-        );
-        page = u.role === "Administrador" ? "dashboard" : "funnel";
-        D.audit(state, user, "Acesso ao sistema", null, "Sessão iniciada");
+        lastSessionTouch = lastActivity;
+        page = user.role === "Administrador" ? "dashboard" : "funnel";
         D.reconcile(state, { id: "system", name: "Sistema" });
         D.ensureAutomations(state);
         save();
@@ -1695,13 +1697,37 @@ export function createCRMController(model) {
     };
     bindOriginDirection();
   }
+  function getActiveOptOutRec(s, contactId) {
+    try {
+      if (typeof D.getActiveOptOut === "function") return D.getActiveOptOut(s, contactId);
+    } catch {}
+    D.ensureOptOuts && D.ensureOptOuts(s);
+    const list = s.optOuts || s.optouts || [];
+    for (let i = list.length - 1; i >= 0; i--) {
+      const o = list[i];
+      if (o.contactId === contactId) {
+        if (o.revokedAt || o.revogado_em) continue;
+        if (o.active === false) continue;
+        return o;
+      }
+    }
+    return null;
+  }
+
   function profile(id) {
     const c = state.contacts.find((c) => c.id === id);
     if (!c) throw Error("Contato não encontrado.");
     const ps = state.payments.filter((p) => p.contactId === id);
+    const optOutRec = getActiveOptOutRec(state, id);
+    const hasOptOut = !!(optOutRec || c.optOut);
+    const optOutInfo = optOutRec
+      ? `Contato com opt-out ativo${optOutRec.at || optOutRec.data_hora ? " · " + (optOutRec.at || optOutRec.data_hora) : ""}${optOutRec.actorName || optOutRec.registrado_por ? " · Responsável: " + (optOutRec.actorName || state.users.find(u=>u.id===(optOutRec.registrado_por||optOutRec.registeredBy||optOutRec.actor))?.name || optOutRec.registrado_por || "") : ""}`
+      : c.optOut
+        ? "Contato com opt-out ativo"
+        : "";
     modal(
       "Ficha de relacionamento",
-      `<div class="profile-hero">${avatar(c)}<div><h2>${esc(c.name)}</h2><p style="margin-top:7px">${statusBadge(c)} ${badge(c.type, "gold")}  ${c.optOut ? badge("Descadastrado de e-mails", "gray") : ""}</p></div></div><div class="profile-grid"><div><dl class="details"><div><dt>E-mail</dt><dd>${esc(c.email || "Não informado")}</dd></div><div><dt>Telefone</dt><dd>${esc(c.phone || "Não informado")}</dd></div><div><dt>CPF / CNPJ</dt><dd>${esc(c.document || "Não informado")}</dd></div><div><dt>Origem</dt><dd>${esc(c.origin)} · ${c.funnel}</dd></div><div><dt>Responsável</dt><dd>${esc(state.users.find((u) => u.id === c.owner)?.name || "—")}</dd></div><div><dt>Desde</dt><dd>${date(c.created)}</dd></div></dl><div class="notice green"><small>Etapa atual</small><p>${D.STAGES[c.stage]}</p>${D.outsideCadence(c) ? `<p>Etapa de perdas: ${esc(D.LOSS_STAGES[D.lossStage(c)])}</p>${c.cadenceExit.followUpDate ? `<p>Retomada agendada: ${date(c.cadenceExit.followUpDate)}</p>` : ""}<p><b>Fora da cadência</b> · ${esc(c.cadenceExit.reason)}</p><p>${esc(c.cadenceExit.note)}</p><p>Saída: ${date(c.cadenceExit.date)} · ${esc(c.cadenceExit.actorName)}</p><p>Última etapa: ${esc(D.STAGES[c.cadenceExit.stage])}</p>` : ""}${c.plan ? `<p style="margin-top:10px">Compromisso: <b>${money(c.plan.amount)}</b> · ${c.plan.mode}${c.plan.due ? " · Dia " + c.plan.due : ""}</p>` : ""}</div>${enrollmentInfo(c)}${intakeSummary(c)}${contactTasks(c)}<div class="profile-actions">${button("Editar", "contact", id, "secondary small", "edit")}${D.outsideCadence(c) ? button("Mover etapa de perdas", "loss-move", id, "secondary small") + button("Retomar cadência", "cadence-resume", id, "secondary small") : button("Registrar perda", "cadence-exit", id, "secondary small")}${!c.plan && !D.outsideCadence(c) ? button("Mover etapa", "move", id, "secondary small", "funnel") + button("Converter em doador", "convert", id, "small", "heart") : c.plan ? button("Registrar doação", "payment", id, "small", "plus") + button("Alterar status", "donor-status", id, "secondary small") : ""}${button("Registrar interação", "interaction", id, "secondary small", "plus")}${button("Registrar resposta", "response", id, "secondary small", "mail")}${c.plan ? button("Comprovante de adesão", "adherence", id, "quiet small", "file") : ""}${!c.optOut && c.email ? button("Enviar mensagem", "contact-mail", id, "quiet small", "mail") : ""}${user.role === "Administrador" ? button("Excluir contato", "delete-contact", id, "danger small") : ""}</div>${ps.length
+      `<div class="profile-hero">${avatar(c)}<div><h2>${esc(c.name)}</h2><p style="margin-top:7px">${statusBadge(c)} ${badge(c.type, "gold")}  ${hasOptOut ? badge("Descadastrado", "gray") : ""}</p></div></div>${hasOptOut ? `<div class="notice red" style="margin-bottom:18px"><strong>Contato com opt-out ativo</strong>${optOutRec?.at || optOutRec?.data_hora ? " · " + date(optOutRec.at || optOutRec.data_hora) + " " + time(optOutRec.at || optOutRec.data_hora) : c.optOut ? "" : ""}${(optOutRec?.actorName || optOutRec?.registrado_por || optOutRec?.registeredBy) ? " · " + esc(optOutRec.actorName || state.users.find(u=>u.id===(optOutRec.registrado_por||optOutRec.registeredBy||optOutRec.actor))?.name || optOutRec.registrado_por || optOutRec.registeredBy || "") : ""}${optOutRec?.motivo || optOutRec?.observacao || optOutRec?.reason || optOutRec?.note ? "<br><small>" + esc(optOutRec.motivo || optOutRec.observacao || optOutRec.reason || optOutRec.note) + "</small>" : ""}</div>` : ""}<div class="profile-grid"><div><dl class="details"><div><dt>E-mail</dt><dd>${esc(c.email || "Não informado")}</dd></div><div><dt>Telefone</dt><dd>${esc(c.phone || "Não informado")}</dd></div><div><dt>CPF / CNPJ</dt><dd>${esc(c.document || "Não informado")}</dd></div><div><dt>Origem</dt><dd>${esc(c.origin)} · ${c.funnel}</dd></div><div><dt>Responsável</dt><dd>${esc(state.users.find((u) => u.id === c.owner)?.name || "—")}</dd></div><div><dt>Desde</dt><dd>${date(c.created)}</dd></div></dl><div class="notice green"><small>Etapa atual</small><p>${D.STAGES[c.stage]}</p>${D.outsideCadence(c) ? `<p>Etapa de perdas: ${esc(D.LOSS_STAGES[D.lossStage(c)])}</p>${c.cadenceExit.followUpDate ? `<p>Retomada agendada: ${date(c.cadenceExit.followUpDate)}</p>` : ""}<p><b>Fora da cadência</b> · ${esc(c.cadenceExit.reason)}</p><p>${esc(c.cadenceExit.note)}</p><p>Saída: ${date(c.cadenceExit.date)} · ${esc(c.cadenceExit.actorName)}</p><p>Última etapa: ${esc(D.STAGES[c.cadenceExit.stage])}</p>` : ""}${c.plan ? `<p style="margin-top:10px">Compromisso: <b>${money(c.plan.amount)}</b> · ${c.plan.mode}${c.plan.due ? " · Dia " + c.plan.due : ""}</p>` : ""}</div>${enrollmentInfo(c)}${intakeSummary(c)}${contactTasks(c)}<div class="profile-actions">${button("Editar", "contact", id, "secondary small", "edit")}${D.outsideCadence(c) ? button("Mover etapa de perdas", "loss-move", id, "secondary small") + button("Retomar cadência", "cadence-resume", id, "secondary small") : button("Registrar perda", "cadence-exit", id, "secondary small")}${!c.plan && !D.outsideCadence(c) ? button("Mover etapa", "move", id, "secondary small", "funnel") + button("Converter em doador", "convert", id, "small", "heart") : c.plan ? button("Registrar doação", "payment", id, "small", "plus") + button("Alterar status", "donor-status", id, "secondary small") : ""}${button("Registrar interação", "interaction", id, "secondary small", "plus")}${button("Registrar resposta", "response", id, "secondary small", "mail")}${c.plan ? button("Comprovante de adesão", "adherence", id, "quiet small", "file") : ""}${!hasOptOut && c.email ? button("Enviar mensagem", "contact-mail", id, "quiet small", "mail") : ""}${!hasOptOut ? button("Registrar opt-out", "optout", id, "secondary small") : ""}${user.role === "Administrador" ? button("Excluir contato", "delete-contact", id, "danger small") : ""}</div>${ps.length
         ? `<h3 style="margin:22px 0 8px">Contribuições · ${money(total(ps))}</h3>${ps
           .slice(0, 4)
           .map(
@@ -1844,7 +1870,20 @@ export function createCRMController(model) {
       (d) => {
         if (!d.message.trim()) throw Error("Informe o conteúdo da resposta.");
         const c = state.contacts.find((c) => c.id === id);
-        if (d.classification === "Pedido de descadastro") c.optOut = true;
+        if (d.classification === "Pedido de descadastro") {
+          try {
+            if (typeof D.optOutContact === "function") {
+              D.optOutContact(state, user, id, { motivo: d.message });
+            } else if (typeof D.registerOptOut === "function") {
+              D.registerOptOut(state, user, id, { motivo: d.message });
+              c.optOut = true;
+            } else {
+              c.optOut = true;
+            }
+          } catch {
+            c.optOut = true;
+          }
+        }
         D.audit(
           state,
           user,
@@ -1863,6 +1902,44 @@ export function createCRMController(model) {
         );
       },
       "Registrar resposta",
+    );
+  }
+
+  function optOutForm(id) {
+    const c = state.contacts.find((c) => c.id === id);
+    if (!c) throw Error("Contato não encontrado.");
+    formModal(
+      "Registrar opt-out",
+      `<p class="notice red">Esta ação é sensível. Ao confirmar, o contato será marcado com opt-out ativo e envios (imediatos e agendados) serão bloqueados.</p><div class="field"><label for="f-motivo">Motivo/observação (opcional)</label><textarea id="f-motivo" name="motivo" maxlength="1000" placeholder="Informe o motivo ou observação opcional."></textarea></div>`,
+      (d) => {
+        try {
+          activeUser();
+          if (typeof D.optOutContact === "function") {
+            D.optOutContact(state, user, id, { motivo: d.motivo });
+          } else {
+            if (typeof D.registerOptOut === "function") {
+              D.registerOptOut(state, user, id, { motivo: d.motivo });
+              c.optOut = true;
+            } else {
+              c.optOut = true;
+            }
+            // Cancel pending
+            if (Array.isArray(state.mailings)) {
+              for (const m of state.mailings) {
+                if (Array.isArray(m.contacts)) m.contacts = m.contacts.filter((x) => x !== id);
+              }
+            }
+          }
+          save();
+          closeModal();
+          render();
+          profile(id);
+          toast("Opt-out registrado com sucesso.");
+        } catch (err) {
+          toast(err.message, "error");
+        }
+      },
+      "Confirmar opt-out",
     );
   }
   function statusForm(id) {
@@ -2166,7 +2243,8 @@ export function createCRMController(model) {
       "Revisar envio",
       true,
     );
-    if (c.optOut) $("[type=submit]", $("#modal-form")).disabled = true;
+    const hasOptOutRec2 = (function(){ try { return typeof D.getActiveOptOut==='function' ? D.getActiveOptOut(state, c.id) : null; } catch { return null; } })();
+    if (c.optOut || hasOptOutRec2) $("[type=submit]", $("#modal-form")).disabled = true;
   }
   function reportPrint() {
     admin();
@@ -2826,6 +2904,9 @@ export function createCRMController(model) {
         case "response":
           responseForm(id);
           break;
+        case "optout":
+          optOutForm(id);
+          break;
         case "donor-status":
           statusForm(id);
           break;
@@ -3119,9 +3200,7 @@ export function createCRMController(model) {
         case "reset-link":
           closeModal();
           runtime.timeout(() => {
-            user = null;
-            sessionStorage.removeItem(SESSION);
-            render();
+            logout();
           }, 0);
           break;
         case "tasks":
@@ -3202,21 +3281,27 @@ export function createCRMController(model) {
   });
   ["pointerdown", "keydown"].forEach((event) =>
     view.on(event, () => {
-      if (user && Date.now() - lastActivity <= 30 * 60 * 1000) {
-        lastActivity = Date.now();
-        sessionStorage.setItem(
-          SESSION,
-          JSON.stringify({ id: user.id, last: lastActivity }),
+      if (!user || Date.now() - lastActivity > 30 * 60 * 1000) return;
+      lastActivity = Date.now();
+      if (Date.now() - lastSessionTouch < SESSION_TOUCH_INTERVAL) return;
+      lastSessionTouch = Date.now();
+      fetch("/api/auth/session", { method: "PUT" })
+        .then((response) => {
+          if (response.status === 401) {
+            logout("Sua sessão foi encerrada por inatividade.");
+          } else if (!response.ok) {
+            toast("Não foi possível renovar sua sessão no servidor.", "error");
+          }
+        })
+        .catch(() =>
+          toast("Não foi possível contatar o servidor para renovar a sessão.", "error"),
         );
-      }
     }),
   );
   runtime.interval(() => {
     if (user) {
       if (Date.now() - lastActivity > 30 * 60 * 1000)
         logout("Sua sessão foi encerrada por inatividade.");
-      else if (!state.users.find((u) => u.id === user.id)?.active)
-        logout("Seu acesso foi inativado.");
       else if (D.processAutomations(state) + D.processMailings(state)) {
         save();
         if (page === "emails" && !$("#modal").open) render();
@@ -3241,17 +3326,13 @@ export function createCRMController(model) {
       return;
     }
     if (e.key === KEY && e.newValue) {
-      try {
-        state = D.repairLegacyHistory(JSON.parse(e.newValue));
-        if (user) {
-          const u = state.users.find((u) => u.id === user.id);
-          if (!u?.active) {
-            logout("Seu acesso foi inativado.");
-            return;
-          }
-          user = u;
-          closeModal();
-          render();
+    try {
+      state = D.repairLegacyHistory(JSON.parse(e.newValue));
+      if (user) {
+        if (!state.users.some((u) => u.id === user.id))
+          state.users.push({ ...user });
+        closeModal();
+        render();
         }
       } catch {
         toast(
@@ -3273,35 +3354,37 @@ export function createCRMController(model) {
       state = raw ? D.repairLegacyHistory(JSON.parse(raw)) : D.createEmptyState();
       if (state.version !== 1 || !Array.isArray(state.contacts))
         throw Error("Dados locais incompatíveis.");
-      if (!state.users.length) {
-        state.users = [
-          {
-            id: "admin",
-            name: "Administrador",
-            email: "admin@luz.exemplo",
-            role: "Administrador",
-            active: true,
-            ...(await credentials("Esperanca@2026")),
-          },
-          {
-            id: "operator",
-            name: "Operador",
-            email: "operador@luz.exemplo",
-            role: "Operador de Captação",
-            active: true,
-            ...(await credentials("Esperanca@2026")),
-          },
-        ];
-      }
-      const rawSession = sessionStorage.getItem(SESSION),
-        session = rawSession ? JSON.parse(rawSession) : null;
-      if (
-        session &&
-        Date.now() - session.last < 30 * 60 * 1000 &&
-        !location.hash.includes("redefinir=")
-      ) {
-        user = state.users.find((u) => u.id === session.id && u.active);
-        lastActivity = session.last;
+      const response = await fetch("/api/auth/session", { cache: "no-store" });
+      if (response.ok) {
+        const result = await response.json();
+        const account = result.user;
+        if (
+          !account ||
+          typeof account.id !== "string" ||
+          typeof account.name !== "string" ||
+          typeof account.email !== "string" ||
+          !["administrador", "operador_captacao"].includes(account.profile)
+        )
+          throw Error("O servidor retornou um perfil de acesso inválido.");
+        user = {
+          id: account.id,
+          name: account.name,
+          email: account.email,
+          role:
+            account.profile === "administrador"
+              ? "Administrador"
+              : "Operador de Captação",
+          active: true,
+        };
+        const savedUser = state.users.find((u) => u.id === user.id);
+        if (savedUser) Object.assign(savedUser, user);
+        else state.users.push({ ...user });
+        page = user.role === "Administrador" ? "dashboard" : "funnel";
+        lastActivity = Date.now();
+        lastSessionTouch = 0;
+      } else if (response.status !== 401) {
+        const result = await response.json().catch(() => ({}));
+        throw Error(result.error || "Não foi possível validar a sessão.");
       }
       D.reconcile(state, { id: "system", name: "Sistema" });
       save();

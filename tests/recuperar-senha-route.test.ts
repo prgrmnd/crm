@@ -1,65 +1,146 @@
-import { test, describe } from "node:test";
+import { test, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { POST } from "../src/app/api/auth/recuperar-senha/route";
+import { randomUUID } from "node:crypto";
+import argon2 from "argon2";
 import { NextRequest } from "next/server";
-import { testWithDatabase } from "./helpers/postgres-test.cjs";
-import D from "./fixtures/seed.cjs";
+import { POST } from "../src/app/api/auth/recuperar-senha/route.ts";
+import { getPrismaClient } from "../src/lib/prisma.ts";
+import { LIMITE_TENTATIVAS, limparRateLimit } from "../src/lib/rate-limit.ts";
 
-describe("POST /api/auth/recuperar-senha", () => {
-  test("retorna 200 OK idêntico para e-mails válidos", () => testWithDatabase(async () => {
-    await D.seed();
-    const request = {
-      headers: new Headers({ "x-forwarded-for": "127.0.0.10" }),
-      json: async () => ({ email: "admin@luz.exemplo" })
-    } as unknown as NextRequest;
+const MENSAGEM = "Se o e-mail estiver cadastrado, você receberá as instruções.";
+const prisma = getPrismaClient();
 
-    const response = await POST(request);
-    assert.equal(response.status, 200);
+after(async () => {
+  await prisma.$disconnect();
+});
 
-    const data = await response.json();
-    assert.equal(data.message, "Se o e-mail estiver cadastrado, você receberá as instruções.");
-  }));
+beforeEach(() => {
+  limparRateLimit();
+});
 
-  test("retorna 200 OK idêntico para e-mails inexistentes", () => testWithDatabase(async () => {
-    const request = {
-      headers: new Headers({ "x-forwarded-for": "127.0.0.11" }),
-      json: async () => ({ email: "naoexiste@exemplo.com" })
-    } as unknown as NextRequest;
+function criarRequest(ip: string, body: unknown, bodyBruto?: string): NextRequest {
+  return new NextRequest("http://localhost/api/auth/recuperar-senha", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-forwarded-for": ip,
+    },
+    body: bodyBruto ?? JSON.stringify(body),
+  });
+}
 
-    const response = await POST(request);
-    assert.equal(response.status, 200);
-  }));
+async function criarUsuario(ativo = true) {
+  const email = `recuperar-${randomUUID()}@luz.example`;
+  const hashGerado = await argon2.hash("Senha-segura-de-teste-2026", {
+    type: argon2.argon2id,
+  });
+  const senhaHash = hashGerado.replace(
+    /\$m=(\d+),p=(\d+),t=(\d+)\$/,
+    (_: string, memory: string, parallelism: string, time: string) =>
+      "$m=" + memory + ",t=" + time + ",p=" + parallelism + "$",
+  );
+  const usuario = await prisma.usuario.create({
+    data: {
+      nome: "Usuário de teste",
+      email,
+      senhaHash,
+      perfil: "operador_captacao",
+      ativo,
+    },
+  });
+  return { usuario, email };
+}
 
-  test("emissão consecutiva invalida o token anterior sem erro 55000", () => testWithDatabase(async () => {
-    await D.seed();
-    const req1 = {
-      headers: new Headers({ "x-forwarded-for": "127.0.0.12" }),
-      json: async () => ({ email: "operador@luz.exemplo" })
-    } as unknown as NextRequest;
-    const res1 = await POST(req1);
-    assert.equal(res1.status, 200);
+test("responde 200 idêntico para e-mail existente e inexistente", async () => {
+  const { email } = await criarUsuario();
 
-    const req2 = {
-      headers: new Headers({ "x-forwarded-for": "127.0.0.13" }),
-      json: async () => ({ email: "operador@luz.exemplo" })
-    } as unknown as NextRequest;
-    const res2 = await POST(req2);
-    assert.equal(res2.status, 200);
-  }));
+  const existente = await POST(criarRequest("10.0.0.1", { email }));
+  const inexistente = await POST(
+    criarRequest("10.0.0.2", { email: `naoexiste-${randomUUID()}@luz.example` }),
+  );
 
-  test("valida bloqueio 429 pelo Rate Limiting", () => testWithDatabase(async () => {
-    const req1 = {
-      headers: new Headers({ "x-forwarded-for": "127.0.0.14" }),
-      json: async () => ({ email: "rate@exemplo.com" })
-    } as unknown as NextRequest;
-    await POST(req1);
+  assert.equal(existente.status, 200);
+  assert.equal(inexistente.status, 200);
+  assert.deepEqual(await existente.json(), { message: MENSAGEM });
+  assert.deepEqual(await inexistente.json(), { message: MENSAGEM });
+});
 
-    const req2 = {
-      headers: new Headers({ "x-forwarded-for": "127.0.0.14" }),
-      json: async () => ({ email: "rate@exemplo.com" })
-    } as unknown as NextRequest;
-    const response2 = await POST(req2);
+test("emissão consecutiva invalida o token anterior sem erro 55000", async () => {
+  const { usuario, email } = await criarUsuario();
 
-    assert.equal(response2.status, 429);
-  }));
+  const res1 = await POST(criarRequest("10.0.0.3", { email }));
+  const res2 = await POST(criarRequest("10.0.0.4", { email }));
+
+  assert.equal(res1.status, 200);
+  assert.equal(res2.status, 200);
+
+  const tokens = await prisma.tokenRecuperacao.findMany({
+    where: { usuarioId: usuario.id },
+  });
+  assert.equal(tokens.length, 2);
+  assert.equal(
+    tokens.filter((t) => t.invalidadoEm === null && t.consumidoEm === null).length,
+    1,
+  );
+  assert.equal(tokens.filter((t) => t.invalidadoEm !== null).length, 1);
+});
+
+test("usuário inativo recebe 200 e nenhum token é criado", async () => {
+  const { usuario, email } = await criarUsuario(false);
+
+  const res = await POST(criarRequest("10.0.0.5", { email }));
+
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { message: MENSAGEM });
+  const total = await prisma.tokenRecuperacao.count({
+    where: { usuarioId: usuario.id },
+  });
+  assert.equal(total, 0);
+});
+
+test("payload inválido retorna 400 e não gasta cota do rate limit", async () => {
+  const ip = "10.0.0.6";
+
+  for (let i = 0; i < LIMITE_TENTATIVAS + 3; i++) {
+    const res = await POST(criarRequest(ip, { email: "isso-nao-e-email" }));
+    assert.equal(res.status, 400);
+  }
+  const semJson = await POST(criarRequest(ip, null, "{nao-e-json"));
+  assert.equal(semJson.status, 400);
+
+  const ok = await POST(
+    criarRequest(ip, { email: `valido-${randomUUID()}@luz.example` }),
+  );
+  assert.equal(ok.status, 200);
+});
+
+test("429 após o limite de tentativas pelo mesmo IP", async () => {
+  const ip = "10.0.0.7";
+
+  for (let i = 0; i < LIMITE_TENTATIVAS; i++) {
+    const res = await POST(
+      criarRequest(ip, { email: `ip-${randomUUID()}@luz.example` }),
+    );
+    assert.equal(res.status, 200);
+  }
+
+  const bloqueada = await POST(
+    criarRequest(ip, { email: `ip-${randomUUID()}@luz.example` }),
+  );
+  assert.equal(bloqueada.status, 429);
+});
+
+test("429 após o limite de tentativas pelo mesmo e-mail normalizado", async () => {
+  const id = randomUUID();
+
+  for (let i = 0; i < LIMITE_TENTATIVAS; i++) {
+    const variacao = i % 2 === 0 ? `Alvo-${id}@Luz.example` : `  alvo-${id}@luz.example `;
+    const res = await POST(criarRequest(`10.0.1.${i}`, { email: variacao }));
+    assert.equal(res.status, 200);
+  }
+
+  const bloqueada = await POST(
+    criarRequest("10.0.1.99", { email: `ALVO-${id}@luz.example` }),
+  );
+  assert.equal(bloqueada.status, 429);
 });

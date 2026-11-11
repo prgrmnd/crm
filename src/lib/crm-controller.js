@@ -1,10 +1,10 @@
 import D from "./domain.cjs";
-import { canDeleteContact, deleteContact } from "./contact-service";
+import { canDeleteContact, deleteContact } from "./contact-service.ts";
 
 export function createCRMController(model) {
   const { view, runtime } = model;
   const KEY = "luz-crm-v1",
-    SESSION = "luz-crm-session-v2";
+    SESSION_TOUCH_INTERVAL = 60 * 1000;
   const $ = (s, r = view) => r.find(s),
     $$ = (s, r = view) => r.findAll(s);
   const THEME_KEY = "luz-crm-theme";
@@ -176,9 +176,92 @@ export function createCRMController(model) {
     tab = "all",
     financeTab = "payments",
     contactPage = 1,
+    contactsLoading = false,
+    contactsError = null,
+    serverContacts = null,
+    serverTotal = null,
+    serverTotalPages = 1,
+    currentContactsReqId = 0,
+    lastContactsRequestKey = "",
     lastActivity = Date.now(),
-    loginAttempts = 0,
-    lockUntil = 0;
+    lastSessionTouch = 0;
+
+  function effectiveContactsTab() {
+    return page === "donors" ? "donors" : tab;
+  }
+  function contactFilterQueryParams() {
+    return {
+      tab: effectiveContactsTab(),
+      q: filters.q || "",
+      origin: filters.origin || "",
+      owner: filters.owner || "",
+      period: filters.period || "",
+      funnel: filters.funnel || "",
+      status: filters.status || "",
+      stage: filters.stage !== undefined ? String(filters.stage) : "",
+    };
+  }
+  async function fetchServerContacts() {
+    if (!user || typeof fetch !== "function") return;
+    const effectiveTab = effectiveContactsTab();
+    const reqKey = `${contactPage}|${effectiveTab}|${page}|${filters.q}|${filters.origin}|${filters.owner}|${filters.period}|${filters.funnel}|${filters.status}|${filters.stage}`;
+    if (reqKey === lastContactsRequestKey && serverContacts !== null && !contactsError) {
+      return;
+    }
+    const reqId = ++currentContactsReqId;
+    lastContactsRequestKey = reqKey;
+    contactsLoading = true;
+    contactsError = null;
+    render();
+
+    try {
+      const params = new URLSearchParams({
+        page: String(contactPage),
+        pageSize: "10",
+        ...contactFilterQueryParams(),
+      });
+
+      const res = await fetch(`/api/contacts?${params.toString()}`);
+      if (reqId !== currentContactsReqId) return;
+
+      if (res.ok) {
+        const data = await res.json();
+        serverContacts = data.contacts || [];
+        serverTotal =
+          typeof data.total === "number" ? data.total : serverContacts.length;
+        serverTotalPages = Math.max(
+          1,
+          data.totalPages || Math.ceil(serverTotal / 10),
+        );
+        contactsLoading = false;
+        contactsError = null;
+
+        if (state && Array.isArray(state.contacts)) {
+          for (const sc of serverContacts) {
+            const idx = state.contacts.findIndex((c) => c.id === sc.id);
+            if (idx >= 0) {
+              state.contacts[idx] = { ...state.contacts[idx], ...sc };
+            } else {
+              state.contacts.push(sc);
+            }
+          }
+        }
+        render();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        contactsLoading = false;
+        contactsError =
+          errData.error || "Erro ao carregar contatos do servidor.";
+        render();
+      }
+    } catch (err) {
+      if (reqId !== currentContactsReqId) return;
+      contactsLoading = false;
+      contactsError =
+        err.message || "Não foi possível carregar os contatos do servidor.";
+      render();
+    }
+  }
   function save() {
     D.processAutomations(state);
     D.processMailings(state);
@@ -231,25 +314,31 @@ export function createCRMController(model) {
       throw Error("Esta ação exige perfil de Administrador.");
   }
   function activeUser() {
-    if (!user || !state.users.some((u) => u.id === user.id && u.active))
+    if (!user)
       throw Error("Sua sessão foi encerrada. Entre novamente.");
     if (Date.now() - lastActivity > 30 * 60 * 1000) {
       logout();
       throw Error("Sessão encerrada por inatividade.");
     }
     lastActivity = Date.now();
-    sessionStorage.setItem(
-      SESSION,
-      JSON.stringify({ id: user.id, last: lastActivity }),
-    );
   }
   function logout(message) {
+    const hadSession = Boolean(user);
     selectedContacts.clear();
-    sessionStorage.removeItem(SESSION);
     user = null;
     closeModal();
     render();
     if (message) toast(message);
+    if (hadSession) {
+      fetch("/api/auth/logout", { method: "POST" })
+        .then((response) => {
+          if (!response.ok)
+            toast("Não foi possível revogar a sessão no servidor.", "error");
+        })
+        .catch(() =>
+          toast("Não foi possível contatar o servidor para revogar a sessão.", "error"),
+        );
+    }
   }
   function navigate(next) {
     if (next === "automations") next = "emails";
@@ -269,8 +358,17 @@ export function createCRMController(model) {
     tab = next === "donors" ? "donors" : "all";
     financeTab = "payments";
     contactPage = 1;
+    serverContacts = null;
+    serverTotal = null;
+    serverTotalPages = 1;
+    contactsLoading = false;
+    contactsError = null;
+    lastContactsRequestKey = "";
+    if (page === "contacts") {
+      fetchServerContacts();
+    }
     render();
-    window.scrollTo(0, 0);
+    if (typeof window !== "undefined") window.scrollTo(0, 0);
   }
   function heading(title, description, actions = "") {
     return `<div class="page-heading"><div><div class="eyebrow">Luz da Esperança · Captação e relacionamento</div><h1>${title}</h1><p>${description}</p></div><div class="flex">${actions}</div></div>`;
@@ -1172,7 +1270,16 @@ export function createCRMController(model) {
     );
   }
   function emailEligible(c) {
-    return Boolean(c?.email && D.emailValid(c.email) && !c.optOut);
+    if (!c) return false;
+    let hasOptOut = !!c.optOut;
+    try {
+      if (typeof D.getActiveOptOut === "function") {
+        hasOptOut = hasOptOut || !!D.getActiveOptOut(state, c.id);
+      } else if (D.hasActiveOptOut) {
+        hasOptOut = hasOptOut || D.hasActiveOptOut(state, c.id);
+      }
+    } catch {}
+    return Boolean(c?.email && D.emailValid(c.email) && !hasOptOut);
   }
   function cleanContactSelection() {
     selectedContacts = new Set(
@@ -1181,19 +1288,175 @@ export function createCRMController(model) {
       ),
     );
   }
-  function selectionToolbar(cs) {
+  function applyCheckboxAction(a, id, b) {
+    switch (a) {
+      case "select-contact":
+        if (emailEligible(state.contacts.find((c) => c.id === id))) {
+          if (b.checked) selectedContacts.add(id);
+          else selectedContacts.delete(id);
+        }
+        render();
+        $('[data-action=select-contact][data-id="' + id + '"]')?.focus({
+          preventScroll: true,
+        });
+        return true;
+      case "select-filtered": {
+        const eligible = visibleContacts().filter(emailEligible);
+        eligible.forEach((c) =>
+          b.checked
+            ? selectedContacts.add(c.id)
+            : selectedContacts.delete(c.id),
+        );
+        render();
+        $("[data-action=select-filtered]")?.focus({ preventScroll: true });
+        return true;
+      }
+      case "select-page": {
+        const isDonors = page === "donors";
+        const currentItems =
+          !isDonors && serverContacts !== null
+            ? serverContacts
+            : visibleContacts().slice((contactPage - 1) * 10, contactPage * 10);
+        const eligible = currentItems.filter(emailEligible);
+        eligible.forEach((c) =>
+          b.checked
+            ? selectedContacts.add(c.id)
+            : selectedContacts.delete(c.id),
+        );
+        render();
+        return true;
+      }
+      case "email-pick":
+        if (emailEligible(state.contacts.find((c) => c.id === id))) {
+          if (b.checked) selectedContacts.add(id);
+          else selectedContacts.delete(id);
+        }
+        updateEmailRecipients();
+        return true;
+      case "email-select-all":
+        recipientMatches()
+          .filter(emailEligible)
+          .forEach((c) =>
+            b.checked
+              ? selectedContacts.add(c.id)
+              : selectedContacts.delete(c.id),
+          );
+        updateEmailRecipients();
+        return true;
+    }
+    return false;
+  }
+  function selectionToolbar(pageContacts = []) {
     cleanContactSelection();
-    const eligible = cs.filter(emailEligible),
-      allSelected =
-        eligible.length > 0 &&
-        eligible.every((c) => selectedContacts.has(c.id));
-    return `<div class="contact-selection-bar"><label class="select-filtered"><input type="checkbox" data-action="select-filtered" ${allSelected ? "checked" : ""} ${eligible.length ? "" : "disabled"} aria-label="Selecionar todos os contatos elegíveis deste filtro"> Selecionar todos do filtro <small>(${eligible.length})</small></label><span class="selection-count" aria-live="polite">${selectedContacts.size} ${selectedContacts.size === 1 ? "selecionado" : "selecionados"}</span><div class="selection-actions">${selectedContacts.size ? button("Limpar seleção", "clear-selection", "", "quiet small") : ""}${button("Redigir e-mail", "bulk-email", "", "small", "mail")}</div></div>`;
+    const pageEligible = pageContacts.filter(emailEligible),
+      allPageSelected =
+        pageEligible.length > 0 &&
+        pageEligible.every((c) => selectedContacts.has(c.id));
+    const allFiltered = visibleContacts().filter(emailEligible),
+      allFilteredSelected =
+        allFiltered.length > 0 &&
+        allFiltered.every((c) => selectedContacts.has(c.id));
+    return `<div class="contact-selection-bar"><label class="select-filtered"><input type="checkbox" data-action="select-filtered" ${allFilteredSelected ? "checked" : ""} ${allFiltered.length ? "" : "disabled"} aria-label="Selecionar todos os contatos elegíveis deste filtro"> Selecionar todos do filtro <small>(${allFiltered.length})</small></label><label class="select-page-wrap" style="display:inline-flex;gap:6px;align-items:center;font-size:11px;cursor:pointer"><input type="checkbox" data-action="select-page" ${allPageSelected ? "checked" : ""} ${pageEligible.length ? "" : "disabled"} aria-label="Selecionar todos os contatos da página atual"> Selecionar página atual <small>(${pageEligible.length})</small></label><span class="selection-count" aria-live="polite">${selectedContacts.size} ${selectedContacts.size === 1 ? "selecionado" : "selecionados"}</span><div class="selection-actions">${selectedContacts.size ? button("Limpar seleção", "clear-selection", "", "quiet small") : ""}${button("Redigir e-mail", "bulk-email", "", "small", "mail")}</div></div>`;
   }
   function contacts() {
-    const isDonors = page === "donors",
-      cs = visibleContacts(),
-      pages = Math.max(1, Math.ceil(cs.length / 10));
-    contactPage = Math.min(contactPage, pages);
+    const isDonors = page === "donors";
+
+    if (contactsLoading) {
+      return (
+        heading(
+          isDonors
+            ? "Quem caminha com a nossa causa"
+            : "Cada contato, uma nova possibilidade",
+          isDonors
+            ? "Acompanhe contribuições e cuide de quem sustenta nossas obras sociais."
+            : "Pessoas e organizações que fazem parte da nossa rede de esperança.",
+          button("Exportar", "export-contacts", "", "secondary", "download") +
+            button("Novo contato", "contact", "", "", "plus"),
+        ) +
+        (!isDonors
+          ? `<div class="tabs">${[
+              ["all", "Todos"],
+              ["leads", "Potenciais"],
+              ["donors", "Doadores"],
+            ]
+              .map(
+                ([v, l]) =>
+                  `<button class="tab ${tab === v ? "active" : ""}" data-action="contact-tab" data-id="${v}">${l}</button>`,
+              )
+              .join("")}</div>`
+          : "") +
+        filtersHTML(
+          select(
+            "status",
+            isDonors
+              ? [...D.DONOR_STATUSES, "Sócio Inscrito"]
+              : ["Potencial doador", ...D.DONOR_STATUSES, "Sócio Inscrito"],
+            filters.status,
+            "Todos os status",
+          ),
+        ) +
+        `<section class="panel contacts-panel"><div class="contacts-loading" aria-live="polite" style="padding:48px;text-align:center"><div class="empty">${icon("clock")}Carregando contatos…</div></div></section>`
+      );
+    }
+
+    if (contactsError) {
+      return (
+        heading(
+          isDonors
+            ? "Quem caminha com a nossa causa"
+            : "Cada contato, uma nova possibilidade",
+          isDonors
+            ? "Acompanhe contribuições e cuide de quem sustenta nossas obras sociais."
+            : "Pessoas e organizações que fazem parte da nossa rede de esperança.",
+          button("Exportar", "export-contacts", "", "secondary", "download") +
+            button("Novo contato", "contact", "", "", "plus"),
+        ) +
+        (!isDonors
+          ? `<div class="tabs">${[
+              ["all", "Todos"],
+              ["leads", "Potenciais"],
+              ["donors", "Doadores"],
+            ]
+              .map(
+                ([v, l]) =>
+                  `<button class="tab ${tab === v ? "active" : ""}" data-action="contact-tab" data-id="${v}">${l}</button>`,
+              )
+              .join("")}</div>`
+          : "") +
+        filtersHTML(
+          select(
+            "status",
+            isDonors
+              ? [...D.DONOR_STATUSES, "Sócio Inscrito"]
+              : ["Potencial doador", ...D.DONOR_STATUSES, "Sócio Inscrito"],
+            filters.status,
+            "Todos os status",
+          ),
+        ) +
+        `<section class="panel contacts-panel"><div class="notice red" role="alert" style="margin:20px;display:flex;align-items:center;justify-content:space-between"><span><strong>Erro ao carregar contatos:</strong> ${esc(contactsError)}</span><button type="button" class="btn secondary small" data-action="retry-contacts">Tentar novamente</button></div></section>`
+      );
+    }
+
+    const localVisible = visibleContacts();
+    const isUsingServer = !isDonors && serverContacts !== null;
+    const pageItems = isUsingServer
+      ? serverContacts
+      : localVisible.slice((contactPage - 1) * 10, contactPage * 10);
+    const totalCount =
+      isUsingServer && typeof serverTotal === "number"
+        ? serverTotal
+        : localVisible.length;
+    const pages =
+      isUsingServer && typeof serverTotalPages === "number"
+        ? serverTotalPages
+        : Math.max(1, Math.ceil(totalCount / 10));
+    contactPage = Math.max(1, Math.min(contactPage, pages));
+
+    const pageEligible = pageItems.filter(emailEligible);
+    const allPageSelected =
+      pageEligible.length > 0 &&
+      pageEligible.every((c) => selectedContacts.has(c.id));
+
     return (
       heading(
         isDonors
@@ -1203,19 +1466,19 @@ export function createCRMController(model) {
           ? "Acompanhe contribuições e cuide de quem sustenta nossas obras sociais."
           : "Pessoas e organizações que fazem parte da nossa rede de esperança.",
         button("Exportar", "export-contacts", "", "secondary", "download") +
-        button("Novo contato", "contact", "", "", "plus"),
+          button("Novo contato", "contact", "", "", "plus"),
       ) +
       (!isDonors
         ? `<div class="tabs">${[
-          ["all", "Todos os contatos"],
-          ["leads", "Potenciais doadores"],
-          ["donors", "Doadores"],
-        ]
-          .map(
-            ([v, l]) =>
-              `<button class="tab ${tab === v ? "active" : ""}" data-action="contact-tab" data-id="${v}">${l}</button>`,
-          )
-          .join("")}</div>`
+            ["all", "Todos"],
+            ["leads", "Potenciais"],
+            ["donors", "Doadores"],
+          ]
+            .map(
+              ([v, l]) =>
+                `<button class="tab ${tab === v ? "active" : ""}" data-action="contact-tab" data-id="${v}">${l}</button>`,
+            )
+            .join("")}</div>`
         : "") +
       filtersHTML(
         select(
@@ -1227,16 +1490,15 @@ export function createCRMController(model) {
           "Todos os status",
         ),
       ) +
-      `<section class="panel contacts-panel">${selectionToolbar(cs)}${cs.length
-        ? `<div class="table-wrap"><table><thead><tr><th class="checkbox-cell"><span class="sr-only">Selecionar destinatário</span></th><th>Relacionamento</th><th>Origem</th><th>${isDonors ? "Compromisso / recebido" : "Etapa / compromisso"}</th><th>Status</th><th>Responsável</th><th></th></tr></thead><tbody>${cs
-          .slice((contactPage - 1) * 10, contactPage * 10)
+      `<section class="panel contacts-panel">${selectionToolbar(pageItems)}${pageItems.length
+        ? `<div class="table-wrap"><table><thead><tr><th class="checkbox-cell"><input type="checkbox" data-action="select-page" aria-label="Selecionar todos os contatos da página atual" ${allPageSelected ? "checked" : ""} ${pageEligible.length ? "" : "disabled"}><span class="sr-only">Selecionar destinatário</span></th><th>Relacionamento</th><th>Origem</th><th>${isDonors ? "Compromisso / recebido" : "Etapa / compromisso"}</th><th>Status</th><th>Responsável</th><th></th></tr></thead><tbody>${pageItems
           .map(
             (c) =>
               `<tr class="${selectedContacts.has(c.id) ? "selected-row" : ""}"><td class="checkbox-cell"><input type="checkbox" data-action="select-contact" data-id="${c.id}" aria-label="Selecionar ${esc(c.name)} para enviar e-mail" ${selectedContacts.has(c.id) ? "checked" : ""} ${emailEligible(c) ? "" : `disabled title="${c.optOut ? "Contato descadastrado de e-mails" : "Sem e-mail válido"}"`}></td><td>${contactCell(c)}</td><td>${esc(c.origin)}<small style="display:block">${c.funnel}</small></td><td>${c.plan ? "Compromisso: " + money(c.plan.amount) + '<small style="display:block">' + c.plan.mode + " · Recebido: " + money(total(state.payments.filter((p) => p.contactId === c.id))) + "</small>" : esc(D.STAGES[c.stage])}</td><td>${statusBadge(c)} ${c.optOut ? badge("Descadastrado", "gray") : ""}</td><td>${esc(state.users.find((u) => u.id === c.owner)?.name || "—")}</td><td><button class="icon-button" data-action="profile" data-id="${c.id}" aria-label="Abrir ficha de ${esc(c.name)}">${icon("arrow")}</button></td></tr>`,
           )
           .join(
             "",
-          )}</tbody></table></div><div class="flex between" style="padding:16px 22px;border-top:1px solid var(--line)"><small>${cs.length} relacionamentos · Página ${contactPage} de ${pages}</small><div class="flex"><button class="btn secondary small" data-action="prev" ${contactPage <= 1 ? "disabled" : ""}>Anterior</button><button class="btn secondary small" data-action="next" ${contactPage >= pages ? "disabled" : ""}>Próxima</button></div></div>`
+          )}</tbody></table></div><div class="flex between" style="padding:16px 22px;border-top:1px solid var(--line)"><small>${totalCount} relacionamentos · Página ${contactPage} de ${pages}</small><div class="flex"><button class="btn secondary small" data-action="prev" ${contactPage <= 1 ? "disabled" : ""}>Anterior</button><button class="btn secondary small" data-action="next" ${contactPage >= pages ? "disabled" : ""}>Próxima</button></div></div>`
         : empty("Nenhum relacionamento encontrado para estes filtros.")
       }</section>`
     );
@@ -1389,9 +1651,8 @@ export function createCRMController(model) {
     );
   }
   function renderLogin() {
-    const token = new URLSearchParams(location.hash.slice(1)).get("redefinir");
     $("#app").markup =
-      `<div class="login"><section class="login-story">${brand()}<div><div class="eyebrow" style="margin-top:50px">Relacionamentos que transformam</div><h1>A esperança floresce quando cuidamos dos nossos laços.</h1><p>Um espaço para acolher, cultivar relacionamentos e acompanhar cada gesto de generosidade.</p><div class="art">${art()}</div></div><footer>Centro Espírita e Obras Sociais · Parnaíba, PI</footer></section><section class="login-content"><div class="login-theme">${themeButton()}</div><div class="login-form"><div class="eyebrow">Bem-vindo ao nosso espaço</div><h2>${token ? "Uma nova senha" : "Que bom ter você aqui."}</h2><p>${token ? "Escolha uma senha para voltar a cuidar dos nossos laços." : "Entre para acompanhar os relacionamentos e contribuições da nossa comunidade."}</p><form id="auth-form"><div class="error" role="alert"></div>${token ? field("Nova senha", "password", "", "password", 'required minlength="8" autocomplete="new-password"') + field("Confirme a nova senha", "confirm", "", "password", 'required minlength="8" autocomplete="new-password"') : field("Seu e-mail", "email", "", "email", 'required autocomplete="username"') + field("Sua senha", "password", "", "password", 'required autocomplete="current-password"')}<button class="btn" type="submit">${token ? "Salvar nova senha" : "Entrar no nosso espaço"} ${icon("arrow")}</button></form>${token ? "" : `<div style="text-align:right;margin-top:14px"><button class="text-link" data-action="recover">Esqueci minha senha</button></div>`}</div></section></div>`;
+      `<div class="login"><section class="login-story">${brand()}<div><div class="eyebrow" style="margin-top:50px">Relacionamentos que transformam</div><h1>A esperança floresce quando cuidamos dos nossos laços.</h1><p>Um espaço para acolher, cultivar relacionamentos e acompanhar cada gesto de generosidade.</p><div class="art">${art()}</div></div><footer>Centro Espírita e Obras Sociais · Parnaíba, PI</footer></section><section class="login-content"><div class="login-theme">${themeButton()}</div><div class="login-form"><div class="eyebrow">Bem-vindo ao nosso espaço</div><h2>Que bom ter você aqui.</h2><p>Entre para acompanhar os relacionamentos e contribuições da nossa comunidade.</p><form id="auth-form"><div class="error" role="alert"></div>${field("Seu e-mail", "email", "", "email", 'required autocomplete="username"')}${field("Sua senha", "password", "", "password", 'required autocomplete="current-password"')}<button class="btn" type="submit">Entrar no nosso espaço ${icon("arrow")}</button></form></div></section></div>`;
     $("#auth-form").onsubmit = async (e) => {
       e.preventDefault();
       const f = e.currentTarget,
@@ -1399,49 +1660,38 @@ export function createCRMController(model) {
       btn.disabled = true;
       try {
         const d = Object.fromEntries(runtime.formEntries(f));
-        if (token) {
-          const r = state.resets.find(
-            (r) => r.token === token && !r.used && r.expires > Date.now(),
-          );
-          if (!r)
-            throw Error(
-              "Link de recuperação inválido ou expirado. Solicite outro.",
-            );
-          if (d.password !== d.confirm)
-            throw Error("As senhas precisam ser iguais.");
-          const u = state.users.find((u) => u.id === r.userId);
-          Object.assign(u, await credentials(d.password));
-          r.used = true;
-          D.audit(state, u, "Senha redefinida", null, "Recuperação de acesso");
-          save();
-          location.hash = "";
-          renderLogin();
-          toast("Senha redefinida. Você já pode entrar.");
-          return;
-        }
-        if (Date.now() < lockUntil)
-          throw Error("Aguarde um minuto antes de tentar novamente.");
-        const u = state.users.find(
-          (u) =>
-            u.email.toLowerCase() === d.email.trim().toLowerCase() && u.active,
-        );
-        if (!u || (await hashPassword(d.password, u.salt)) !== u.passwordHash) {
-          loginAttempts++;
-          if (loginAttempts >= 5) {
-            lockUntil = Date.now() + 60000;
-            loginAttempts = 0;
-          }
-          throw Error("E-mail ou senha inválidos, ou usuário inativo.");
-        }
-        user = u;
-        loginAttempts = 0;
+        const response = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: d.email, password: d.password }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw Error(result.error || "Não foi possível entrar.");
+        const account = result.user;
+        if (
+          !account ||
+          typeof account.id !== "string" ||
+          typeof account.name !== "string" ||
+          typeof account.email !== "string" ||
+          !["administrador", "operador_captacao"].includes(account.profile)
+        )
+          throw Error("O servidor retornou um perfil de acesso inválido.");
+        user = {
+          id: account.id,
+          name: account.name,
+          email: account.email,
+          role:
+            account.profile === "administrador"
+              ? "Administrador"
+              : "Operador de Captação",
+          active: true,
+        };
+        const savedUser = state.users.find((u) => u.id === user.id);
+        if (savedUser) Object.assign(savedUser, user);
+        else state.users.push({ ...user });
         lastActivity = Date.now();
-        sessionStorage.setItem(
-          SESSION,
-          JSON.stringify({ id: u.id, last: lastActivity }),
-        );
-        page = u.role === "Administrador" ? "dashboard" : "funnel";
-        D.audit(state, user, "Acesso ao sistema", null, "Sessão iniciada");
+        lastSessionTouch = lastActivity;
+        page = user.role === "Administrador" ? "dashboard" : "funnel";
         D.reconcile(state, { id: "system", name: "Sistema" });
         D.ensureAutomations(state);
         save();
@@ -1464,6 +1714,9 @@ export function createCRMController(model) {
       search.on("input", (e) => {
         filters.q = e.target.value;
         contactPage = 1;
+        serverContacts = null;
+        lastContactsRequestKey = "";
+        if (page === "contacts") fetchServerContacts();
         const pos = e.target.selectionStart;
         $("#main").markup = content() + pageFooter();
         bindPage();
@@ -1475,6 +1728,9 @@ export function createCRMController(model) {
       (el.onchange = () => {
         filters[el.name] = el.value;
         contactPage = 1;
+        serverContacts = null;
+        lastContactsRequestKey = "";
+        if (page === "contacts") fetchServerContacts();
         render();
       }),
     );
@@ -1695,13 +1951,37 @@ export function createCRMController(model) {
     };
     bindOriginDirection();
   }
+  function getActiveOptOutRec(s, contactId) {
+    try {
+      if (typeof D.getActiveOptOut === "function") return D.getActiveOptOut(s, contactId);
+    } catch {}
+    D.ensureOptOuts && D.ensureOptOuts(s);
+    const list = s.optOuts || s.optouts || [];
+    for (let i = list.length - 1; i >= 0; i--) {
+      const o = list[i];
+      if (o.contactId === contactId) {
+        if (o.revokedAt || o.revogado_em) continue;
+        if (o.active === false) continue;
+        return o;
+      }
+    }
+    return null;
+  }
+
   function profile(id) {
     const c = state.contacts.find((c) => c.id === id);
     if (!c) throw Error("Contato não encontrado.");
     const ps = state.payments.filter((p) => p.contactId === id);
+    const optOutRec = getActiveOptOutRec(state, id);
+    const hasOptOut = !!(optOutRec || c.optOut);
+    const optOutInfo = optOutRec
+      ? `Contato com opt-out ativo${optOutRec.at || optOutRec.data_hora ? " · " + (optOutRec.at || optOutRec.data_hora) : ""}${optOutRec.actorName || optOutRec.registrado_por ? " · Responsável: " + (optOutRec.actorName || state.users.find(u=>u.id===(optOutRec.registrado_por||optOutRec.registeredBy||optOutRec.actor))?.name || optOutRec.registrado_por || "") : ""}`
+      : c.optOut
+        ? "Contato com opt-out ativo"
+        : "";
     modal(
       "Ficha de relacionamento",
-      `<div class="profile-hero">${avatar(c)}<div><h2>${esc(c.name)}</h2><p style="margin-top:7px">${statusBadge(c)} ${badge(c.type, "gold")}  ${c.optOut ? badge("Descadastrado de e-mails", "gray") : ""}</p></div></div><div class="profile-grid"><div><dl class="details"><div><dt>E-mail</dt><dd>${esc(c.email || "Não informado")}</dd></div><div><dt>Telefone</dt><dd>${esc(c.phone || "Não informado")}</dd></div><div><dt>CPF / CNPJ</dt><dd>${esc(c.document || "Não informado")}</dd></div><div><dt>Origem</dt><dd>${esc(c.origin)} · ${c.funnel}</dd></div><div><dt>Responsável</dt><dd>${esc(state.users.find((u) => u.id === c.owner)?.name || "—")}</dd></div><div><dt>Desde</dt><dd>${date(c.created)}</dd></div></dl><div class="notice green"><small>Etapa atual</small><p>${D.STAGES[c.stage]}</p>${D.outsideCadence(c) ? `<p>Etapa de perdas: ${esc(D.LOSS_STAGES[D.lossStage(c)])}</p>${c.cadenceExit.followUpDate ? `<p>Retomada agendada: ${date(c.cadenceExit.followUpDate)}</p>` : ""}<p><b>Fora da cadência</b> · ${esc(c.cadenceExit.reason)}</p><p>${esc(c.cadenceExit.note)}</p><p>Saída: ${date(c.cadenceExit.date)} · ${esc(c.cadenceExit.actorName)}</p><p>Última etapa: ${esc(D.STAGES[c.cadenceExit.stage])}</p>` : ""}${c.plan ? `<p style="margin-top:10px">Compromisso: <b>${money(c.plan.amount)}</b> · ${c.plan.mode}${c.plan.due ? " · Dia " + c.plan.due : ""}</p>` : ""}</div>${enrollmentInfo(c)}${intakeSummary(c)}${contactTasks(c)}<div class="profile-actions">${button("Editar", "contact", id, "secondary small", "edit")}${D.outsideCadence(c) ? button("Mover etapa de perdas", "loss-move", id, "secondary small") + button("Retomar cadência", "cadence-resume", id, "secondary small") : button("Registrar perda", "cadence-exit", id, "secondary small")}${!c.plan && !D.outsideCadence(c) ? button("Mover etapa", "move", id, "secondary small", "funnel") + button("Converter em doador", "convert", id, "small", "heart") : c.plan ? button("Registrar doação", "payment", id, "small", "plus") + button("Alterar status", "donor-status", id, "secondary small") : ""}${button("Registrar interação", "interaction", id, "secondary small", "plus")}${button("Registrar resposta", "response", id, "secondary small", "mail")}${c.plan ? button("Comprovante de adesão", "adherence", id, "quiet small", "file") : ""}${!c.optOut && c.email ? button("Enviar mensagem", "contact-mail", id, "quiet small", "mail") : ""}${user.role === "Administrador" ? button("Excluir contato", "delete-contact", id, "danger small") : ""}</div>${ps.length
+      `<div class="profile-hero">${avatar(c)}<div><h2>${esc(c.name)}</h2><p style="margin-top:7px">${statusBadge(c)} ${badge(c.type, "gold")}  ${hasOptOut ? badge("Descadastrado", "gray") : ""}</p></div></div>${hasOptOut ? `<div class="notice red" style="margin-bottom:18px"><strong>Contato com opt-out ativo</strong>${optOutRec?.at || optOutRec?.data_hora ? " · " + date(optOutRec.at || optOutRec.data_hora) + " " + time(optOutRec.at || optOutRec.data_hora) : c.optOut ? "" : ""}${(optOutRec?.actorName || optOutRec?.registrado_por || optOutRec?.registeredBy) ? " · " + esc(optOutRec.actorName || state.users.find(u=>u.id===(optOutRec.registrado_por||optOutRec.registeredBy||optOutRec.actor))?.name || optOutRec.registrado_por || optOutRec.registeredBy || "") : ""}${optOutRec?.motivo || optOutRec?.observacao || optOutRec?.reason || optOutRec?.note ? "<br><small>" + esc(optOutRec.motivo || optOutRec.observacao || optOutRec.reason || optOutRec.note) + "</small>" : ""}</div>` : ""}<div class="profile-grid"><div><dl class="details"><div><dt>E-mail</dt><dd>${esc(c.email || "Não informado")}</dd></div><div><dt>Telefone</dt><dd>${esc(c.phone || "Não informado")}</dd></div><div><dt>CPF / CNPJ</dt><dd>${esc(c.document || "Não informado")}</dd></div><div><dt>Origem</dt><dd>${esc(c.origin)} · ${c.funnel}</dd></div><div><dt>Responsável</dt><dd>${esc(state.users.find((u) => u.id === c.owner)?.name || "—")}</dd></div><div><dt>Desde</dt><dd>${date(c.created)}</dd></div></dl><div class="notice green"><small>Etapa atual</small><p>${D.STAGES[c.stage]}</p>${D.outsideCadence(c) ? `<p>Etapa de perdas: ${esc(D.LOSS_STAGES[D.lossStage(c)])}</p>${c.cadenceExit.followUpDate ? `<p>Retomada agendada: ${date(c.cadenceExit.followUpDate)}</p>` : ""}<p><b>Fora da cadência</b> · ${esc(c.cadenceExit.reason)}</p><p>${esc(c.cadenceExit.note)}</p><p>Saída: ${date(c.cadenceExit.date)} · ${esc(c.cadenceExit.actorName)}</p><p>Última etapa: ${esc(D.STAGES[c.cadenceExit.stage])}</p>` : ""}${c.plan ? `<p style="margin-top:10px">Compromisso: <b>${money(c.plan.amount)}</b> · ${c.plan.mode}${c.plan.due ? " · Dia " + c.plan.due : ""}</p>` : ""}</div>${enrollmentInfo(c)}${intakeSummary(c)}${contactTasks(c)}<div class="profile-actions">${button("Editar", "contact", id, "secondary small", "edit")}${D.outsideCadence(c) ? button("Mover etapa de perdas", "loss-move", id, "secondary small") + button("Retomar cadência", "cadence-resume", id, "secondary small") : button("Registrar perda", "cadence-exit", id, "secondary small")}${!c.plan && !D.outsideCadence(c) ? button("Mover etapa", "move", id, "secondary small", "funnel") + button("Converter em doador", "convert", id, "small", "heart") : c.plan ? button("Registrar doação", "payment", id, "small", "plus") + button("Alterar status", "donor-status", id, "secondary small") : ""}${button("Registrar interação", "interaction", id, "secondary small", "plus")}${button("Registrar resposta", "response", id, "secondary small", "mail")}${c.plan ? button("Comprovante de adesão", "adherence", id, "quiet small", "file") : ""}${!hasOptOut && c.email ? button("Enviar mensagem", "contact-mail", id, "quiet small", "mail") : ""}${!hasOptOut ? button("Registrar opt-out", "optout", id, "secondary small") : ""}${user.role === "Administrador" ? button("Excluir contato", "delete-contact", id, "danger small") : ""}</div>${ps.length
         ? `<h3 style="margin:22px 0 8px">Contribuições · ${money(total(ps))}</h3>${ps
           .slice(0, 4)
           .map(
@@ -1844,7 +2124,20 @@ export function createCRMController(model) {
       (d) => {
         if (!d.message.trim()) throw Error("Informe o conteúdo da resposta.");
         const c = state.contacts.find((c) => c.id === id);
-        if (d.classification === "Pedido de descadastro") c.optOut = true;
+        if (d.classification === "Pedido de descadastro") {
+          try {
+            if (typeof D.optOutContact === "function") {
+              D.optOutContact(state, user, id, { motivo: d.message });
+            } else if (typeof D.registerOptOut === "function") {
+              D.registerOptOut(state, user, id, { motivo: d.message });
+              c.optOut = true;
+            } else {
+              c.optOut = true;
+            }
+          } catch {
+            c.optOut = true;
+          }
+        }
         D.audit(
           state,
           user,
@@ -1863,6 +2156,44 @@ export function createCRMController(model) {
         );
       },
       "Registrar resposta",
+    );
+  }
+
+  function optOutForm(id) {
+    const c = state.contacts.find((c) => c.id === id);
+    if (!c) throw Error("Contato não encontrado.");
+    formModal(
+      "Registrar opt-out",
+      `<p class="notice red">Esta ação é sensível. Ao confirmar, o contato será marcado com opt-out ativo e envios (imediatos e agendados) serão bloqueados.</p><div class="field"><label for="f-motivo">Motivo/observação (opcional)</label><textarea id="f-motivo" name="motivo" maxlength="1000" placeholder="Informe o motivo ou observação opcional."></textarea></div>`,
+      (d) => {
+        try {
+          activeUser();
+          if (typeof D.optOutContact === "function") {
+            D.optOutContact(state, user, id, { motivo: d.motivo });
+          } else {
+            if (typeof D.registerOptOut === "function") {
+              D.registerOptOut(state, user, id, { motivo: d.motivo });
+              c.optOut = true;
+            } else {
+              c.optOut = true;
+            }
+            // Cancel pending
+            if (Array.isArray(state.mailings)) {
+              for (const m of state.mailings) {
+                if (Array.isArray(m.contacts)) m.contacts = m.contacts.filter((x) => x !== id);
+              }
+            }
+          }
+          save();
+          closeModal();
+          render();
+          profile(id);
+          toast("Opt-out registrado com sucesso.");
+        } catch (err) {
+          toast(err.message, "error");
+        }
+      },
+      "Confirmar opt-out",
     );
   }
   function statusForm(id) {
@@ -2166,7 +2497,8 @@ export function createCRMController(model) {
       "Revisar envio",
       true,
     );
-    if (c.optOut) $("[type=submit]", $("#modal-form")).disabled = true;
+    const hasOptOutRec2 = (function(){ try { return typeof D.getActiveOptOut==='function' ? D.getActiveOptOut(state, c.id) : null; } catch { return null; } })();
+    if (c.optOut || hasOptOutRec2) $("[type=submit]", $("#modal-form")).disabled = true;
   }
   function reportPrint() {
     admin();
@@ -2678,18 +3010,63 @@ export function createCRMController(model) {
         .join("\r\n")
     );
   }
-  function exportContacts() {
-    const cs = filterContacts().filter((c) =>
-      page === "donors"
-        ? c.plan
-        : tab === "leads"
-          ? !c.plan
-          : tab === "donors"
-            ? c.plan
-            : true,
+  function localContactsForExport(isSelected) {
+    if (isSelected) {
+      return Array.from(selectedContacts)
+        .map((id) => state.contacts.find((c) => c.id === id))
+        .filter(Boolean);
+    }
+    return filterContacts().filter((c) =>
+      effectiveContactsTab() === "leads"
+        ? !c.plan
+        : effectiveContactsTab() === "donors"
+          ? c.plan
+          : true,
     );
+  }
+  async function exportContacts() {
+    const selectedIds = Array.from(selectedContacts);
+    const isSelected = selectedIds.length > 0;
+    const filename = isSelected
+      ? "contatos-selecionados-luz.csv"
+      : "relacionamentos-luz.csv";
+    const successMessage = isSelected
+      ? "Contatos selecionados exportados."
+      : "Relacionamentos exportados.";
+
+    // A exportação filtrada considera todos os resultados do servidor. A
+    // exportação selecionada envia apenas os IDs marcados, inclusive os que
+    // foram escolhidos em outras páginas.
+    if (page === "contacts" && typeof fetch === "function") {
+      try {
+        const params = new URLSearchParams({
+          export: "csv",
+          ...contactFilterQueryParams(),
+        });
+        if (isSelected) params.set("ids", selectedIds.join(","));
+        const response = await fetch(`/api/contacts?${params.toString()}`);
+        if (response.ok) {
+          const data = await response.text();
+          if (data.trim()) {
+            download(filename, data);
+            toast(successMessage);
+            return;
+          }
+        }
+      } catch {
+        // A API pode estar indisponível; mantém a exportação local como
+        // alternativa sem impedir o uso da tela.
+      }
+    }
+
+    const cs = localContactsForExport(isSelected);
+    if (cs.length === 0) {
+      toast("Nenhum contato encontrado para exportação.", "error");
+      return;
+    }
+
     download(
-      "relacionamentos-luz.csv",
+      filename,
       csv([
         [
           "Nome",
@@ -2715,7 +3092,7 @@ export function createCRMController(model) {
         ]),
       ]),
     );
-    toast("Relacionamentos exportados.");
+    toast(successMessage);
   }
   function exportFinance(report = false) {
     if (report) {
@@ -2833,6 +3210,9 @@ export function createCRMController(model) {
           break;
         case "response":
           responseForm(id);
+          break;
+        case "optout":
+          optOutForm(id);
           break;
         case "donor-status":
           statusForm(id);
@@ -2953,26 +3333,14 @@ export function createCRMController(model) {
           render();
           break;
         case "select-contact":
-          if (emailEligible(state.contacts.find((c) => c.id === id))) {
-            if (b.checked) selectedContacts.add(id);
-            else selectedContacts.delete(id);
-          }
-          render();
-          $('[data-action=select-contact][data-id="' + id + '"]')?.focus({
-            preventScroll: true,
-          });
+        case "select-filtered":
+        case "select-page":
+          applyCheckboxAction(a, id, b);
           break;
-        case "select-filtered": {
-          const eligible = visibleContacts().filter(emailEligible);
-          eligible.forEach((c) =>
-            b.checked
-              ? selectedContacts.add(c.id)
-              : selectedContacts.delete(c.id),
-          );
-          render();
-          $("[data-action=select-filtered]")?.focus({ preventScroll: true });
+        case "retry-contacts":
+          lastContactsRequestKey = "";
+          fetchServerContacts();
           break;
-        }
         case "clear-selection":
           selectedContacts.clear();
           render();
@@ -3021,21 +3389,8 @@ export function createCRMController(model) {
           emailMailingDetail(id);
           break;
         case "email-pick":
-          if (emailEligible(state.contacts.find((c) => c.id === id))) {
-            if (b.checked) selectedContacts.add(id);
-            else selectedContacts.delete(id);
-          }
-          updateEmailRecipients();
-          break;
         case "email-select-all":
-          recipientMatches()
-            .filter(emailEligible)
-            .forEach((c) =>
-              b.checked
-                ? selectedContacts.add(c.id)
-                : selectedContacts.delete(c.id),
-            );
-          updateEmailRecipients();
+          applyCheckboxAction(a, id, b);
           break;
         case "email-clear":
           selectedContacts.clear();
@@ -3044,6 +3399,9 @@ export function createCRMController(model) {
         case "contact-tab":
           tab = id;
           contactPage = 1;
+          serverContacts = null;
+          lastContactsRequestKey = "";
+          if (page === "contacts") fetchServerContacts();
           render();
           break;
         case "finance-tab":
@@ -3063,14 +3421,24 @@ export function createCRMController(model) {
             mode: "",
             stage: "",
           };
+          contactPage = 1;
+          serverContacts = null;
+          lastContactsRequestKey = "";
+          if (page === "contacts") fetchServerContacts();
           render();
           break;
         case "prev":
           contactPage--;
+          serverContacts = null;
+          lastContactsRequestKey = "";
+          if (page === "contacts") fetchServerContacts();
           render();
           break;
         case "next":
           contactPage++;
+          serverContacts = null;
+          lastContactsRequestKey = "";
+          if (page === "contacts") fetchServerContacts();
           render();
           break;
         case "list":
@@ -3127,9 +3495,7 @@ export function createCRMController(model) {
         case "reset-link":
           closeModal();
           runtime.timeout(() => {
-            user = null;
-            sessionStorage.removeItem(SESSION);
-            render();
+            logout();
           }, 0);
           break;
         case "tasks":
@@ -3196,6 +3562,28 @@ export function createCRMController(model) {
       toast(err.message, "error");
     }
   });
+  view.on("change", (e) => {
+    const b = e.target.closest("[data-action]");
+    if (!b || b.disabled) return;
+    const a = b.dataset.action,
+      id = b.dataset.id || "";
+    if (
+      ![
+        "select-contact",
+        "select-filtered",
+        "select-page",
+        "email-pick",
+        "email-select-all",
+      ].includes(a)
+    )
+      return;
+    try {
+      activeUser();
+      applyCheckboxAction(a, id, b);
+    } catch (err) {
+      toast(err.message, "error");
+    }
+  });
   $("#modal").on("click", (e) => {
     if (e.target === $("#modal")) {
       const r = e.target.getBoundingClientRect();
@@ -3210,21 +3598,27 @@ export function createCRMController(model) {
   });
   ["pointerdown", "keydown"].forEach((event) =>
     view.on(event, () => {
-      if (user && Date.now() - lastActivity <= 30 * 60 * 1000) {
-        lastActivity = Date.now();
-        sessionStorage.setItem(
-          SESSION,
-          JSON.stringify({ id: user.id, last: lastActivity }),
+      if (!user || Date.now() - lastActivity > 30 * 60 * 1000) return;
+      lastActivity = Date.now();
+      if (Date.now() - lastSessionTouch < SESSION_TOUCH_INTERVAL) return;
+      lastSessionTouch = Date.now();
+      fetch("/api/auth/session", { method: "PUT" })
+        .then((response) => {
+          if (response.status === 401) {
+            logout("Sua sessão foi encerrada por inatividade.");
+          } else if (!response.ok) {
+            toast("Não foi possível renovar sua sessão no servidor.", "error");
+          }
+        })
+        .catch(() =>
+          toast("Não foi possível contatar o servidor para renovar a sessão.", "error"),
         );
-      }
     }),
   );
   runtime.interval(() => {
     if (user) {
       if (Date.now() - lastActivity > 30 * 60 * 1000)
         logout("Sua sessão foi encerrada por inatividade.");
-      else if (!state.users.find((u) => u.id === user.id)?.active)
-        logout("Seu acesso foi inativado.");
       else if (D.processAutomations(state) + D.processMailings(state)) {
         save();
         if (page === "emails" && !$("#modal").open) render();
@@ -3249,17 +3643,13 @@ export function createCRMController(model) {
       return;
     }
     if (e.key === KEY && e.newValue) {
-      try {
-        state = D.repairLegacyHistory(JSON.parse(e.newValue));
-        if (user) {
-          const u = state.users.find((u) => u.id === user.id);
-          if (!u?.active) {
-            logout("Seu acesso foi inativado.");
-            return;
-          }
-          user = u;
-          closeModal();
-          render();
+    try {
+      state = D.repairLegacyHistory(JSON.parse(e.newValue));
+      if (user) {
+        if (!state.users.some((u) => u.id === user.id))
+          state.users.push({ ...user });
+        closeModal();
+        render();
         }
       } catch {
         toast(
@@ -3281,35 +3671,37 @@ export function createCRMController(model) {
       state = raw ? D.repairLegacyHistory(JSON.parse(raw)) : D.createEmptyState();
       if (state.version !== 1 || !Array.isArray(state.contacts))
         throw Error("Dados locais incompatíveis.");
-      if (!state.users.length) {
-        state.users = [
-          {
-            id: "admin",
-            name: "Administrador",
-            email: "admin@luz.exemplo",
-            role: "Administrador",
-            active: true,
-            ...(await credentials("Esperanca@2026")),
-          },
-          {
-            id: "operator",
-            name: "Operador",
-            email: "operador@luz.exemplo",
-            role: "Operador de Captação",
-            active: true,
-            ...(await credentials("Esperanca@2026")),
-          },
-        ];
-      }
-      const rawSession = sessionStorage.getItem(SESSION),
-        session = rawSession ? JSON.parse(rawSession) : null;
-      if (
-        session &&
-        Date.now() - session.last < 30 * 60 * 1000 &&
-        !location.hash.includes("redefinir=")
-      ) {
-        user = state.users.find((u) => u.id === session.id && u.active);
-        lastActivity = session.last;
+      const response = await fetch("/api/auth/session", { cache: "no-store" });
+      if (response.ok) {
+        const result = await response.json();
+        const account = result.user;
+        if (
+          !account ||
+          typeof account.id !== "string" ||
+          typeof account.name !== "string" ||
+          typeof account.email !== "string" ||
+          !["administrador", "operador_captacao"].includes(account.profile)
+        )
+          throw Error("O servidor retornou um perfil de acesso inválido.");
+        user = {
+          id: account.id,
+          name: account.name,
+          email: account.email,
+          role:
+            account.profile === "administrador"
+              ? "Administrador"
+              : "Operador de Captação",
+          active: true,
+        };
+        const savedUser = state.users.find((u) => u.id === user.id);
+        if (savedUser) Object.assign(savedUser, user);
+        else state.users.push({ ...user });
+        page = user.role === "Administrador" ? "dashboard" : "funnel";
+        lastActivity = Date.now();
+        lastSessionTouch = 0;
+      } else if (response.status !== 401) {
+        const result = await response.json().catch(() => ({}));
+        throw Error(result.error || "Não foi possível validar a sessão.");
       }
       D.reconcile(state, { id: "system", name: "Sistema" });
       save();

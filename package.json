@@ -16,11 +16,13 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
+    "db:bootstrap-admin": "node scripts/bootstrap-admin.mjs",
     "db:studio": "prisma studio"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
+    "argon2": "0.45.1",
     "css-select": "6.0.0",
     "domutils": "3.2.2",
     "dotenv": "^17.2.3",
@@ -42,6 +44,7 @@
     "typescript": "^7.0.2"
   },
   "allowScripts": {
+    "argon2@0.45.1": true,
     "@prisma/engines@7.10.0": true,
     "prisma@7.10.0": true
   }

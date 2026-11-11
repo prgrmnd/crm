@@ -1,5 +1,5 @@
 import D from "./domain.cjs";
-import { canDeleteContact, deleteContact } from "./contact-service";
+import { canDeleteContact, deleteContact } from "./contact-service.ts";
 
 export function createCRMController(model) {
   const { view, runtime } = model;
@@ -176,8 +176,92 @@ export function createCRMController(model) {
     tab = "all",
     financeTab = "payments",
     contactPage = 1,
+    contactsLoading = false,
+    contactsError = null,
+    serverContacts = null,
+    serverTotal = null,
+    serverTotalPages = 1,
+    currentContactsReqId = 0,
+    lastContactsRequestKey = "",
     lastActivity = Date.now(),
     lastSessionTouch = 0;
+
+  function effectiveContactsTab() {
+    return page === "donors" ? "donors" : tab;
+  }
+  function contactFilterQueryParams() {
+    return {
+      tab: effectiveContactsTab(),
+      q: filters.q || "",
+      origin: filters.origin || "",
+      owner: filters.owner || "",
+      period: filters.period || "",
+      funnel: filters.funnel || "",
+      status: filters.status || "",
+      stage: filters.stage !== undefined ? String(filters.stage) : "",
+    };
+  }
+  async function fetchServerContacts() {
+    if (!user || typeof fetch !== "function") return;
+    const effectiveTab = effectiveContactsTab();
+    const reqKey = `${contactPage}|${effectiveTab}|${page}|${filters.q}|${filters.origin}|${filters.owner}|${filters.period}|${filters.funnel}|${filters.status}|${filters.stage}`;
+    if (reqKey === lastContactsRequestKey && serverContacts !== null && !contactsError) {
+      return;
+    }
+    const reqId = ++currentContactsReqId;
+    lastContactsRequestKey = reqKey;
+    contactsLoading = true;
+    contactsError = null;
+    render();
+
+    try {
+      const params = new URLSearchParams({
+        page: String(contactPage),
+        pageSize: "10",
+        ...contactFilterQueryParams(),
+      });
+
+      const res = await fetch(`/api/contacts?${params.toString()}`);
+      if (reqId !== currentContactsReqId) return;
+
+      if (res.ok) {
+        const data = await res.json();
+        serverContacts = data.contacts || [];
+        serverTotal =
+          typeof data.total === "number" ? data.total : serverContacts.length;
+        serverTotalPages = Math.max(
+          1,
+          data.totalPages || Math.ceil(serverTotal / 10),
+        );
+        contactsLoading = false;
+        contactsError = null;
+
+        if (state && Array.isArray(state.contacts)) {
+          for (const sc of serverContacts) {
+            const idx = state.contacts.findIndex((c) => c.id === sc.id);
+            if (idx >= 0) {
+              state.contacts[idx] = { ...state.contacts[idx], ...sc };
+            } else {
+              state.contacts.push(sc);
+            }
+          }
+        }
+        render();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        contactsLoading = false;
+        contactsError =
+          errData.error || "Erro ao carregar contatos do servidor.";
+        render();
+      }
+    } catch (err) {
+      if (reqId !== currentContactsReqId) return;
+      contactsLoading = false;
+      contactsError =
+        err.message || "Não foi possível carregar os contatos do servidor.";
+      render();
+    }
+  }
   function save() {
     D.processAutomations(state);
     D.processMailings(state);
@@ -274,8 +358,17 @@ export function createCRMController(model) {
     tab = next === "donors" ? "donors" : "all";
     financeTab = "payments";
     contactPage = 1;
+    serverContacts = null;
+    serverTotal = null;
+    serverTotalPages = 1;
+    contactsLoading = false;
+    contactsError = null;
+    lastContactsRequestKey = "";
+    if (page === "contacts") {
+      fetchServerContacts();
+    }
     render();
-    window.scrollTo(0, 0);
+    if (typeof window !== "undefined") window.scrollTo(0, 0);
   }
   function heading(title, description, actions = "") {
     return `<div class="page-heading"><div><div class="eyebrow">Luz da Esperança · Captação e relacionamento</div><h1>${title}</h1><p>${description}</p></div><div class="flex">${actions}</div></div>`;
@@ -1195,19 +1288,175 @@ export function createCRMController(model) {
       ),
     );
   }
-  function selectionToolbar(cs) {
+  function applyCheckboxAction(a, id, b) {
+    switch (a) {
+      case "select-contact":
+        if (emailEligible(state.contacts.find((c) => c.id === id))) {
+          if (b.checked) selectedContacts.add(id);
+          else selectedContacts.delete(id);
+        }
+        render();
+        $('[data-action=select-contact][data-id="' + id + '"]')?.focus({
+          preventScroll: true,
+        });
+        return true;
+      case "select-filtered": {
+        const eligible = visibleContacts().filter(emailEligible);
+        eligible.forEach((c) =>
+          b.checked
+            ? selectedContacts.add(c.id)
+            : selectedContacts.delete(c.id),
+        );
+        render();
+        $("[data-action=select-filtered]")?.focus({ preventScroll: true });
+        return true;
+      }
+      case "select-page": {
+        const isDonors = page === "donors";
+        const currentItems =
+          !isDonors && serverContacts !== null
+            ? serverContacts
+            : visibleContacts().slice((contactPage - 1) * 10, contactPage * 10);
+        const eligible = currentItems.filter(emailEligible);
+        eligible.forEach((c) =>
+          b.checked
+            ? selectedContacts.add(c.id)
+            : selectedContacts.delete(c.id),
+        );
+        render();
+        return true;
+      }
+      case "email-pick":
+        if (emailEligible(state.contacts.find((c) => c.id === id))) {
+          if (b.checked) selectedContacts.add(id);
+          else selectedContacts.delete(id);
+        }
+        updateEmailRecipients();
+        return true;
+      case "email-select-all":
+        recipientMatches()
+          .filter(emailEligible)
+          .forEach((c) =>
+            b.checked
+              ? selectedContacts.add(c.id)
+              : selectedContacts.delete(c.id),
+          );
+        updateEmailRecipients();
+        return true;
+    }
+    return false;
+  }
+  function selectionToolbar(pageContacts = []) {
     cleanContactSelection();
-    const eligible = cs.filter(emailEligible),
-      allSelected =
-        eligible.length > 0 &&
-        eligible.every((c) => selectedContacts.has(c.id));
-    return `<div class="contact-selection-bar"><label class="select-filtered"><input type="checkbox" data-action="select-filtered" ${allSelected ? "checked" : ""} ${eligible.length ? "" : "disabled"} aria-label="Selecionar todos os contatos elegíveis deste filtro"> Selecionar todos do filtro <small>(${eligible.length})</small></label><span class="selection-count" aria-live="polite">${selectedContacts.size} ${selectedContacts.size === 1 ? "selecionado" : "selecionados"}</span><div class="selection-actions">${selectedContacts.size ? button("Limpar seleção", "clear-selection", "", "quiet small") : ""}${button("Redigir e-mail", "bulk-email", "", "small", "mail")}</div></div>`;
+    const pageEligible = pageContacts.filter(emailEligible),
+      allPageSelected =
+        pageEligible.length > 0 &&
+        pageEligible.every((c) => selectedContacts.has(c.id));
+    const allFiltered = visibleContacts().filter(emailEligible),
+      allFilteredSelected =
+        allFiltered.length > 0 &&
+        allFiltered.every((c) => selectedContacts.has(c.id));
+    return `<div class="contact-selection-bar"><label class="select-filtered"><input type="checkbox" data-action="select-filtered" ${allFilteredSelected ? "checked" : ""} ${allFiltered.length ? "" : "disabled"} aria-label="Selecionar todos os contatos elegíveis deste filtro"> Selecionar todos do filtro <small>(${allFiltered.length})</small></label><label class="select-page-wrap" style="display:inline-flex;gap:6px;align-items:center;font-size:11px;cursor:pointer"><input type="checkbox" data-action="select-page" ${allPageSelected ? "checked" : ""} ${pageEligible.length ? "" : "disabled"} aria-label="Selecionar todos os contatos da página atual"> Selecionar página atual <small>(${pageEligible.length})</small></label><span class="selection-count" aria-live="polite">${selectedContacts.size} ${selectedContacts.size === 1 ? "selecionado" : "selecionados"}</span><div class="selection-actions">${selectedContacts.size ? button("Limpar seleção", "clear-selection", "", "quiet small") : ""}${button("Redigir e-mail", "bulk-email", "", "small", "mail")}</div></div>`;
   }
   function contacts() {
-    const isDonors = page === "donors",
-      cs = visibleContacts(),
-      pages = Math.max(1, Math.ceil(cs.length / 10));
-    contactPage = Math.min(contactPage, pages);
+    const isDonors = page === "donors";
+
+    if (contactsLoading) {
+      return (
+        heading(
+          isDonors
+            ? "Quem caminha com a nossa causa"
+            : "Cada contato, uma nova possibilidade",
+          isDonors
+            ? "Acompanhe contribuições e cuide de quem sustenta nossas obras sociais."
+            : "Pessoas e organizações que fazem parte da nossa rede de esperança.",
+          button("Exportar", "export-contacts", "", "secondary", "download") +
+            button("Novo contato", "contact", "", "", "plus"),
+        ) +
+        (!isDonors
+          ? `<div class="tabs">${[
+              ["all", "Todos"],
+              ["leads", "Potenciais"],
+              ["donors", "Doadores"],
+            ]
+              .map(
+                ([v, l]) =>
+                  `<button class="tab ${tab === v ? "active" : ""}" data-action="contact-tab" data-id="${v}">${l}</button>`,
+              )
+              .join("")}</div>`
+          : "") +
+        filtersHTML(
+          select(
+            "status",
+            isDonors
+              ? [...D.DONOR_STATUSES, "Sócio Inscrito"]
+              : ["Potencial doador", ...D.DONOR_STATUSES, "Sócio Inscrito"],
+            filters.status,
+            "Todos os status",
+          ),
+        ) +
+        `<section class="panel contacts-panel"><div class="contacts-loading" aria-live="polite" style="padding:48px;text-align:center"><div class="empty">${icon("clock")}Carregando contatos…</div></div></section>`
+      );
+    }
+
+    if (contactsError) {
+      return (
+        heading(
+          isDonors
+            ? "Quem caminha com a nossa causa"
+            : "Cada contato, uma nova possibilidade",
+          isDonors
+            ? "Acompanhe contribuições e cuide de quem sustenta nossas obras sociais."
+            : "Pessoas e organizações que fazem parte da nossa rede de esperança.",
+          button("Exportar", "export-contacts", "", "secondary", "download") +
+            button("Novo contato", "contact", "", "", "plus"),
+        ) +
+        (!isDonors
+          ? `<div class="tabs">${[
+              ["all", "Todos"],
+              ["leads", "Potenciais"],
+              ["donors", "Doadores"],
+            ]
+              .map(
+                ([v, l]) =>
+                  `<button class="tab ${tab === v ? "active" : ""}" data-action="contact-tab" data-id="${v}">${l}</button>`,
+              )
+              .join("")}</div>`
+          : "") +
+        filtersHTML(
+          select(
+            "status",
+            isDonors
+              ? [...D.DONOR_STATUSES, "Sócio Inscrito"]
+              : ["Potencial doador", ...D.DONOR_STATUSES, "Sócio Inscrito"],
+            filters.status,
+            "Todos os status",
+          ),
+        ) +
+        `<section class="panel contacts-panel"><div class="notice red" role="alert" style="margin:20px;display:flex;align-items:center;justify-content:space-between"><span><strong>Erro ao carregar contatos:</strong> ${esc(contactsError)}</span><button type="button" class="btn secondary small" data-action="retry-contacts">Tentar novamente</button></div></section>`
+      );
+    }
+
+    const localVisible = visibleContacts();
+    const isUsingServer = !isDonors && serverContacts !== null;
+    const pageItems = isUsingServer
+      ? serverContacts
+      : localVisible.slice((contactPage - 1) * 10, contactPage * 10);
+    const totalCount =
+      isUsingServer && typeof serverTotal === "number"
+        ? serverTotal
+        : localVisible.length;
+    const pages =
+      isUsingServer && typeof serverTotalPages === "number"
+        ? serverTotalPages
+        : Math.max(1, Math.ceil(totalCount / 10));
+    contactPage = Math.max(1, Math.min(contactPage, pages));
+
+    const pageEligible = pageItems.filter(emailEligible);
+    const allPageSelected =
+      pageEligible.length > 0 &&
+      pageEligible.every((c) => selectedContacts.has(c.id));
+
     return (
       heading(
         isDonors
@@ -1217,19 +1466,19 @@ export function createCRMController(model) {
           ? "Acompanhe contribuições e cuide de quem sustenta nossas obras sociais."
           : "Pessoas e organizações que fazem parte da nossa rede de esperança.",
         button("Exportar", "export-contacts", "", "secondary", "download") +
-        button("Novo contato", "contact", "", "", "plus"),
+          button("Novo contato", "contact", "", "", "plus"),
       ) +
       (!isDonors
         ? `<div class="tabs">${[
-          ["all", "Todos os contatos"],
-          ["leads", "Potenciais doadores"],
-          ["donors", "Doadores"],
-        ]
-          .map(
-            ([v, l]) =>
-              `<button class="tab ${tab === v ? "active" : ""}" data-action="contact-tab" data-id="${v}">${l}</button>`,
-          )
-          .join("")}</div>`
+            ["all", "Todos"],
+            ["leads", "Potenciais"],
+            ["donors", "Doadores"],
+          ]
+            .map(
+              ([v, l]) =>
+                `<button class="tab ${tab === v ? "active" : ""}" data-action="contact-tab" data-id="${v}">${l}</button>`,
+            )
+            .join("")}</div>`
         : "") +
       filtersHTML(
         select(
@@ -1241,16 +1490,15 @@ export function createCRMController(model) {
           "Todos os status",
         ),
       ) +
-      `<section class="panel contacts-panel">${selectionToolbar(cs)}${cs.length
-        ? `<div class="table-wrap"><table><thead><tr><th class="checkbox-cell"><span class="sr-only">Selecionar destinatário</span></th><th>Relacionamento</th><th>Origem</th><th>${isDonors ? "Compromisso / recebido" : "Etapa / compromisso"}</th><th>Status</th><th>Responsável</th><th></th></tr></thead><tbody>${cs
-          .slice((contactPage - 1) * 10, contactPage * 10)
+      `<section class="panel contacts-panel">${selectionToolbar(pageItems)}${pageItems.length
+        ? `<div class="table-wrap"><table><thead><tr><th class="checkbox-cell"><input type="checkbox" data-action="select-page" aria-label="Selecionar todos os contatos da página atual" ${allPageSelected ? "checked" : ""} ${pageEligible.length ? "" : "disabled"}><span class="sr-only">Selecionar destinatário</span></th><th>Relacionamento</th><th>Origem</th><th>${isDonors ? "Compromisso / recebido" : "Etapa / compromisso"}</th><th>Status</th><th>Responsável</th><th></th></tr></thead><tbody>${pageItems
           .map(
             (c) =>
               `<tr class="${selectedContacts.has(c.id) ? "selected-row" : ""}"><td class="checkbox-cell"><input type="checkbox" data-action="select-contact" data-id="${c.id}" aria-label="Selecionar ${esc(c.name)} para enviar e-mail" ${selectedContacts.has(c.id) ? "checked" : ""} ${emailEligible(c) ? "" : `disabled title="${c.optOut ? "Contato descadastrado de e-mails" : "Sem e-mail válido"}"`}></td><td>${contactCell(c)}</td><td>${esc(c.origin)}<small style="display:block">${c.funnel}</small></td><td>${c.plan ? "Compromisso: " + money(c.plan.amount) + '<small style="display:block">' + c.plan.mode + " · Recebido: " + money(total(state.payments.filter((p) => p.contactId === c.id))) + "</small>" : esc(D.STAGES[c.stage])}</td><td>${statusBadge(c)} ${c.optOut ? badge("Descadastrado", "gray") : ""}</td><td>${esc(state.users.find((u) => u.id === c.owner)?.name || "—")}</td><td><button class="icon-button" data-action="profile" data-id="${c.id}" aria-label="Abrir ficha de ${esc(c.name)}">${icon("arrow")}</button></td></tr>`,
           )
           .join(
             "",
-          )}</tbody></table></div><div class="flex between" style="padding:16px 22px;border-top:1px solid var(--line)"><small>${cs.length} relacionamentos · Página ${contactPage} de ${pages}</small><div class="flex"><button class="btn secondary small" data-action="prev" ${contactPage <= 1 ? "disabled" : ""}>Anterior</button><button class="btn secondary small" data-action="next" ${contactPage >= pages ? "disabled" : ""}>Próxima</button></div></div>`
+          )}</tbody></table></div><div class="flex between" style="padding:16px 22px;border-top:1px solid var(--line)"><small>${totalCount} relacionamentos · Página ${contactPage} de ${pages}</small><div class="flex"><button class="btn secondary small" data-action="prev" ${contactPage <= 1 ? "disabled" : ""}>Anterior</button><button class="btn secondary small" data-action="next" ${contactPage >= pages ? "disabled" : ""}>Próxima</button></div></div>`
         : empty("Nenhum relacionamento encontrado para estes filtros.")
       }</section>`
     );
@@ -1466,6 +1714,9 @@ export function createCRMController(model) {
       search.on("input", (e) => {
         filters.q = e.target.value;
         contactPage = 1;
+        serverContacts = null;
+        lastContactsRequestKey = "";
+        if (page === "contacts") fetchServerContacts();
         const pos = e.target.selectionStart;
         $("#main").markup = content() + pageFooter();
         bindPage();
@@ -1477,6 +1728,9 @@ export function createCRMController(model) {
       (el.onchange = () => {
         filters[el.name] = el.value;
         contactPage = 1;
+        serverContacts = null;
+        lastContactsRequestKey = "";
+        if (page === "contacts") fetchServerContacts();
         render();
       }),
     );
@@ -2756,18 +3010,63 @@ export function createCRMController(model) {
         .join("\r\n")
     );
   }
-  function exportContacts() {
-    const cs = filterContacts().filter((c) =>
-      page === "donors"
-        ? c.plan
-        : tab === "leads"
-          ? !c.plan
-          : tab === "donors"
-            ? c.plan
-            : true,
+  function localContactsForExport(isSelected) {
+    if (isSelected) {
+      return Array.from(selectedContacts)
+        .map((id) => state.contacts.find((c) => c.id === id))
+        .filter(Boolean);
+    }
+    return filterContacts().filter((c) =>
+      effectiveContactsTab() === "leads"
+        ? !c.plan
+        : effectiveContactsTab() === "donors"
+          ? c.plan
+          : true,
     );
+  }
+  async function exportContacts() {
+    const selectedIds = Array.from(selectedContacts);
+    const isSelected = selectedIds.length > 0;
+    const filename = isSelected
+      ? "contatos-selecionados-luz.csv"
+      : "relacionamentos-luz.csv";
+    const successMessage = isSelected
+      ? "Contatos selecionados exportados."
+      : "Relacionamentos exportados.";
+
+    // A exportação filtrada considera todos os resultados do servidor. A
+    // exportação selecionada envia apenas os IDs marcados, inclusive os que
+    // foram escolhidos em outras páginas.
+    if (page === "contacts" && typeof fetch === "function") {
+      try {
+        const params = new URLSearchParams({
+          export: "csv",
+          ...contactFilterQueryParams(),
+        });
+        if (isSelected) params.set("ids", selectedIds.join(","));
+        const response = await fetch(`/api/contacts?${params.toString()}`);
+        if (response.ok) {
+          const data = await response.text();
+          if (data.trim()) {
+            download(filename, data);
+            toast(successMessage);
+            return;
+          }
+        }
+      } catch {
+        // A API pode estar indisponível; mantém a exportação local como
+        // alternativa sem impedir o uso da tela.
+      }
+    }
+
+    const cs = localContactsForExport(isSelected);
+    if (cs.length === 0) {
+      toast("Nenhum contato encontrado para exportação.", "error");
+      return;
+    }
+
     download(
-      "relacionamentos-luz.csv",
+      filename,
       csv([
         [
           "Nome",
@@ -2793,7 +3092,7 @@ export function createCRMController(model) {
         ]),
       ]),
     );
-    toast("Relacionamentos exportados.");
+    toast(successMessage);
   }
   function exportFinance(report = false) {
     if (report) {
@@ -3034,26 +3333,14 @@ export function createCRMController(model) {
           render();
           break;
         case "select-contact":
-          if (emailEligible(state.contacts.find((c) => c.id === id))) {
-            if (b.checked) selectedContacts.add(id);
-            else selectedContacts.delete(id);
-          }
-          render();
-          $('[data-action=select-contact][data-id="' + id + '"]')?.focus({
-            preventScroll: true,
-          });
+        case "select-filtered":
+        case "select-page":
+          applyCheckboxAction(a, id, b);
           break;
-        case "select-filtered": {
-          const eligible = visibleContacts().filter(emailEligible);
-          eligible.forEach((c) =>
-            b.checked
-              ? selectedContacts.add(c.id)
-              : selectedContacts.delete(c.id),
-          );
-          render();
-          $("[data-action=select-filtered]")?.focus({ preventScroll: true });
+        case "retry-contacts":
+          lastContactsRequestKey = "";
+          fetchServerContacts();
           break;
-        }
         case "clear-selection":
           selectedContacts.clear();
           render();
@@ -3102,21 +3389,8 @@ export function createCRMController(model) {
           emailMailingDetail(id);
           break;
         case "email-pick":
-          if (emailEligible(state.contacts.find((c) => c.id === id))) {
-            if (b.checked) selectedContacts.add(id);
-            else selectedContacts.delete(id);
-          }
-          updateEmailRecipients();
-          break;
         case "email-select-all":
-          recipientMatches()
-            .filter(emailEligible)
-            .forEach((c) =>
-              b.checked
-                ? selectedContacts.add(c.id)
-                : selectedContacts.delete(c.id),
-            );
-          updateEmailRecipients();
+          applyCheckboxAction(a, id, b);
           break;
         case "email-clear":
           selectedContacts.clear();
@@ -3125,6 +3399,9 @@ export function createCRMController(model) {
         case "contact-tab":
           tab = id;
           contactPage = 1;
+          serverContacts = null;
+          lastContactsRequestKey = "";
+          if (page === "contacts") fetchServerContacts();
           render();
           break;
         case "finance-tab":
@@ -3144,14 +3421,24 @@ export function createCRMController(model) {
             mode: "",
             stage: "",
           };
+          contactPage = 1;
+          serverContacts = null;
+          lastContactsRequestKey = "";
+          if (page === "contacts") fetchServerContacts();
           render();
           break;
         case "prev":
           contactPage--;
+          serverContacts = null;
+          lastContactsRequestKey = "";
+          if (page === "contacts") fetchServerContacts();
           render();
           break;
         case "next":
           contactPage++;
+          serverContacts = null;
+          lastContactsRequestKey = "";
+          if (page === "contacts") fetchServerContacts();
           render();
           break;
         case "list":
@@ -3271,6 +3558,28 @@ export function createCRMController(model) {
           break;
         }
       }
+    } catch (err) {
+      toast(err.message, "error");
+    }
+  });
+  view.on("change", (e) => {
+    const b = e.target.closest("[data-action]");
+    if (!b || b.disabled) return;
+    const a = b.dataset.action,
+      id = b.dataset.id || "";
+    if (
+      ![
+        "select-contact",
+        "select-filtered",
+        "select-page",
+        "email-pick",
+        "email-select-all",
+      ].includes(a)
+    )
+      return;
+    try {
+      activeUser();
+      applyCheckboxAction(a, id, b);
     } catch (err) {
       toast(err.message, "error");
     }

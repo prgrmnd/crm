@@ -13,5 +13,19 @@ export async function resolve(specifier, context, nextResolve) {
     return nextResolve(new URL(specifier.slice(2), srcRoot).href, context);
   }
 
-  return nextResolve(specifier, context);
+  try {
+    return await nextResolve(specifier, context);
+  } catch (err) {
+    if (
+      err.code === 'ERR_MODULE_NOT_FOUND' &&
+      !specifier.endsWith('.ts') &&
+      !specifier.endsWith('.js') &&
+      !specifier.endsWith('.cjs')
+    ) {
+      try {
+        return await nextResolve(specifier + '.ts', context);
+      } catch {}
+    }
+    throw err;
+  }
 }

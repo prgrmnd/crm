@@ -112,6 +112,14 @@ A Ficha 360° do contato e a linha do tempo (`src/lib/domain.cjs` e `src/lib/crm
 - **Trava de exclusão por histórico financeiro (PB-009)**: a exclusão de contatos exige perfil `Administrador` (`deleteContact`) e verificação prévia via `canDeleteContact`. Se o contato possuir qualquer pagamento ou contribuição registrada no histórico financeiro, a exclusão é bloqueada no domínio e na interface (orientando a alteração do status do plano para `Cancelado` para encerrar recorrências).
 - **Formulário rápido de interações na timeline (PB-010)**: `registerInteraction` registra interações diretamente na ficha do contato exigindo usuário autenticado, seleção obrigatória de canal (`telefone`, `whatsapp`, `reuniao` ou `email`), data/hora válida com bloqueio estrito de datas futuras (`interactionDate <= now`) e resumo obrigatório da conversa (não vazio, limite de 3.000 caracteres). Os registros são inseridos como eventos imutáveis na timeline do contato e na trilha de auditoria (`Contato por <Canal>`).
 
+### Listagem de contatos (Issue #14)
+
+A tela de contatos consulta `GET /api/contacts` com sessão autenticada. A listagem é paginada no servidor (`page` e `pageSize`) e aceita os filtros `tab` (`all`, `leads`, `donors`), `q`, `origin`, `owner`, `period`, `funnel`, `status`, `stage` e `ids`. A troca de filtros reinicia a página, e a navegação entre páginas preserva os parâmetros ativos.
+
+- **Seleção em lote**: os identificadores ficam em um `Set` independente da página, permitindo selecionar, desmarcar e limpar contatos mesmo após navegar entre páginas.
+- **Exportação CSV**: `GET /api/contacts?export=csv` gera o arquivo com todos os resultados do filtro. Quando há seleção, o frontend envia `ids` e exporta somente os contatos marcados; sem seleção, exporta o resultado filtrado. O arquivo usa UTF-8 com BOM, separador `;`, cabeçalhos e escape de aspas/caracteres especiais.
+- **Fallback de demonstração**: quando o PostgreSQL ainda não possui contatos cadastrados, a API usa a massa de demonstração para manter a tela navegável. Como o schema atual não modela planos de doação nem pagamentos, os doadores continuam vindo dessa massa de demonstração; a integração de planos ao banco permanece uma limitação registrada para uma issue futura.
+
 Produção:
 
 ```powershell

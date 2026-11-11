@@ -421,10 +421,12 @@ export function createViewState(notify) {
       return id;
     },
     onWindow(type, fn) {
+      if (typeof window === "undefined") return;
       window.addEventListener(type, fn);
       cleanup.push(() => window.removeEventListener(type, fn));
     },
     onMedia(type, fn) {
+      if (typeof matchMedia !== "function") return;
       const media = matchMedia("(prefers-color-scheme: dark)");
       media.addEventListener(type, fn);
       cleanup.push(() => media.removeEventListener(type, fn));

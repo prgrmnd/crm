@@ -143,9 +143,8 @@ src/lib/view-state.js    estado de apresentação e interface com APIs nativas
 src/lib/domain.cjs       regras de domínio originais, Ficha 360° e interações
 public/favicon.png       logo e favicon originais
 tests/                   domínio, estado, integração PostgreSQL, fluxos no Chrome e comparação visual
+docs/                    documentação técnica e guia de auditoria/code review
 source-manifest.json     hashes SHA-256 dos arquivos de origem
-INVENTARIO.md            checklist anterior à implementação
-RELATORIO-PARIDADE.md    correspondência e resultados de validação
 ```
 
 `ViewNode` converte o modelo de apresentação em elementos React, atributos JSX, objetos de estilo e eventos React. O controlador consulta e atualiza apenas essa árvore de estado; não altera o DOM montado. O React faz a renderização e reconciliação. Os templates preservam a estrutura, textos e seletores originais, incluindo fragmentos compartilhados por fichas, formulários, impressão e telas.

@@ -6,4 +6,3 @@ test-results/
 !.env.example
 src/generated/prisma/
 *.tsbuildinfo
-docs/

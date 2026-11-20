@@ -1,6 +1,7 @@
 (function (root) {
   'use strict';
   const STAGES = ['Aprendizado e descoberta', 'Reconhecimento do problema', 'Consideração da solução', 'Decisão de doação'], ORIGINS = ['Instagram', 'Site', 'Indicação', 'E-mail', 'Evento', 'WhatsApp'], DESTINATIONS = ['Obras sociais', 'Sopa Fraterna', 'Reforço de Luz', 'Escola Esperança'];
+  const INBOUND_ONLY_ORIGINS = ['Site', 'Instagram'], inboundOnly = origin => INBOUND_ONLY_ORIGINS.includes(origin);
   const uid = () => globalThis.crypto?.randomUUID?.() || 'id-' + Date.now().toString(36) + Math.random().toString(36).slice(2);
   const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') };
   const month = (date = new Date()) => typeof date === 'string' ? date.slice(0, 7) : date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0');
@@ -22,7 +23,7 @@
     if (!name || name.length > 120 || !subject || subject.length > 180 || !body || body.length > 10000) throw Error('Informe nome, assunto e mensagem dentro dos limites.');
     if (!Object.hasOwn(AUTO_EVENTS, d.event) || d.origin && !ORIGINS.includes(d.origin) || d.direction && !['Inbound', 'Outbound'].includes(d.direction) || d.stage !== '' && (!Number.isInteger(Number(d.stage)) || Number(d.stage) < 0 || Number(d.stage) >= STAGES.length)) throw Error('Selecione evento e condições válidos.');
     if (d.event === 'registered' && d.direction && d.direction !== 'Inbound') throw Error('Boas-vindas se aplicam somente a cadastros Inbound.');
-    if (['Site', 'Instagram'].includes(d.origin) && d.direction === 'Outbound') throw Error('Site e Instagram permitem somente Inbound.');
+    if (inboundOnly(d.origin) && d.direction === 'Outbound') throw Error('Site e Instagram permitem somente Inbound.');
     const delayMinutes = Number(d.delayMinutes);
     if (!Number.isFinite(delayMinutes) || delayMinutes < 0 || delayMinutes > 525600 || !Number.isInteger(delayMinutes)) throw Error('Defina um intervalo em minutos entre zero e um ano.');
     const allowed = ['nome', 'origem', 'etapa', ...(d.event === 'payment' ? ['valor', 'recibo'] : [])];
@@ -111,7 +112,7 @@
     audit(s, a, 'Nova tentativa de automação', run.contactId, run.rule.name);
   }
   function documentValid(value, type) { const d = String(value).replace(/\D/g, ''); if (!d) return true; if (/^(\d)\1+$/.test(d)) return false; if (type === 'PF') { if (d.length !== 11) return false; for (let size = 9; size <= 10; size++) { const sum = [...d.slice(0, size)].reduce((s, n, i) => s + Number(n) * (size + 1 - i), 0); if ((sum * 10 % 11) % 10 !== Number(d[size])) return false } return true } if (d.length !== 14) return false; for (let size = 12; size <= 13; size++) { let w = size - 7; const sum = [...d.slice(0, size)].reduce((s, n) => { let v = s + Number(n) * w; w = w === 2 ? 9 : w - 1; return v }, 0), r = sum % 11; if ((r < 2 ? 0 : 11 - r) !== Number(d[size])) return false } return true }
-  function validateContact(d, contacts, id, detailsOnly = false) { if (!String(d.name || '').trim()) throw Error('Informe o nome ou razão social.'); if (!d.email && !d.phone) throw Error('Informe pelo menos um e-mail ou telefone.'); if (d.email && !emailValid(d.email)) throw Error('Informe um e-mail válido.'); if (d.phone && !/^\d{10,11}$/.test(d.phone.replace(/\D/g, ''))) throw Error('Informe um telefone com DDD.'); if (!documentValid(d.document || '', d.type)) throw Error('CPF ou CNPJ inválido. Confira os dígitos.'); if (contacts.some(c => c.id !== id && ((d.email && c.email.toLowerCase() === d.email.toLowerCase()) || (d.document && c.document?.replace(/\D/g, '') === d.document.replace(/\D/g, ''))))) throw Error('Já existe um contato com este e-mail ou CPF/CNPJ.'); if (!detailsOnly && ['Site', 'Instagram'].includes(d.origin) && d.funnel !== 'Inbound') throw Error('Contatos de origem ' + d.origin + ' devem ser Inbound.'); if (!ORIGINS.includes(d.origin) || !['Inbound', 'Outbound'].includes(d.funnel) || !Number.isInteger(Number(d.stage)) || Number(d.stage) < 0 || Number(d.stage) > 3) throw Error('Selecione origem, funil e etapa válidos.') }
+  function validateContact(d, contacts, id, detailsOnly = false) { const email = String(d.email || '').trim(), docNumber = String(d.document || '').replace(/\D/g, ''); if (!String(d.name || '').trim()) throw Error('Informe o nome ou razão social.'); if (!email && !d.phone) throw Error('Informe pelo menos um e-mail ou telefone.'); if (email && !emailValid(email)) throw Error('Informe um e-mail válido.'); if (d.phone && !/^\d{10,11}$/.test(String(d.phone).replace(/\D/g, ''))) throw Error('Informe um telefone com DDD.'); if (!documentValid(docNumber, d.type)) throw Error('CPF ou CNPJ inválido. Confira os dígitos.'); if (contacts.some(c => c.id !== id && ((email && String(c.email || '').trim().toLowerCase() === email.toLowerCase()) || (docNumber && String(c.document || '').replace(/\D/g, '') === docNumber)))) throw Error('Já existe um contato com este e-mail ou CPF/CNPJ.'); if (!detailsOnly && inboundOnly(d.origin) && d.funnel !== 'Inbound') throw Error('Contatos de origem ' + d.origin + ' devem ser Inbound.'); if (!ORIGINS.includes(d.origin) || !['Inbound', 'Outbound'].includes(d.funnel) || !Number.isInteger(Number(d.stage)) || Number(d.stage) < 0 || Number(d.stage) > 3) throw Error('Selecione origem, funil e etapa válidos.') }
   function audit(s, a, action, contactId, details = '') {
     const e = { id: uid(), at: new Date().toISOString(), actor: a.id, actorName: a.name, action, contactId, details }; s.audit.unshift(e); if (contactId) s.contacts.find(c => c.id === contactId)?.history.unshift(e);
     if (contactId) {
@@ -185,7 +186,7 @@
   function validateIntake(s, a, d) {
     automationAccess(s, a);
     if (!String(d.name || '').trim() || !ORIGINS.includes(d.origin) || !['Inbound', 'Outbound'].includes(d.direction)) throw Error('Informe nome, origem e classificação.');
-    if (['Site', 'Instagram'].includes(d.origin) && d.direction !== 'Inbound') throw Error('Site e Instagram devem ser Inbound.');
+    if (inboundOnly(d.origin) && d.direction !== 'Inbound') throw Error('Site e Instagram devem ser Inbound.');
     if (d.stage !== '' && (!Number.isInteger(Number(d.stage)) || Number(d.stage) < 0 || Number(d.stage) > 3)) throw Error('Etapa inválida.');
     if (d.owner && !s.users.some(u => u.id === d.owner && u.active)) throw Error('Responsável deve estar ativo.');
     if (d.owner && a.role !== 'Administrador' && d.owner !== a.id) throw Error('Operador só pode atribuir a si mesmo.');
@@ -400,7 +401,7 @@
   function simulateMailing(s, a, id) { automationAccess(s, a); const m = s.mailings?.find(m => m.id === id); if (m?.status !== 'active') throw Error('Ative o e-mail antes de simular.'); audit(s, a, 'Simulação de e-mail solicitada', null, m.subject); return processMailings(s, new Date(), id) }
   function repairContactOrigins(s) {
     for (const c of s.contacts || []) {
-      if (!['Site', 'Instagram'].includes(c.origin) || c.funnel === 'Inbound') continue;
+      if (!inboundOnly(c.origin) || c.funnel === 'Inbound') continue;
       const previous = c.funnel; c.funnel = 'Inbound'; c.history ??= []; s.audit ??= [];
       audit(s, AUTO_SYSTEM, 'Origem e direção corrigidas', c.id, c.origin + ' / ' + previous + ' → ' + c.origin + ' / Inbound');
     }
@@ -690,5 +691,5 @@
     }
   }
 
-  const api = { canDeleteContact, deleteContact, registerInteraction, registerOptOut, revokeOptOut, getActiveOptOut, hasActiveOptOut, ensureOptOuts, optOutContact, INTERACTION_CHANNELS, INTERACTION_CHANNEL_LABELS, normalizeInteractionChannel, repairContactOrigins, firstMailingAt, ensureMailings, saveMailing, setMailingStatus, processMailings, simulateMailing, mailingOccurrence, mailingBlock, ensureExtensions, saveIntake, activateIntake, applyIntake, retryIntake, DONOR_STATUSES, enrolled, suspendedPeriod, changeStatus, validDate, segmentContacts, addToList, receiptSnapshot, sendReceipt, reportData, AUTO_EVENTS, ensureAutomations, saveAutomation, setAutomationActive, queueAutomations, processAutomations, retryAutomation, cancelAutomationRuns, renderAutomationMessage, LOSS_STAGES, lossStage, moveLoss, LOSS_REASONS, outsideCadence, exitCadence, resumeCadence, repairLegacyHistory, STAGES, ORIGINS, DESTINATIONS, uid, today, month, emailValid, documentValid, validateContact, audit, move, convert, payment, pending, reconcile, parseCSV, importRows, send, createEmptyState }; if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.CRM = api;
+  const api = { canDeleteContact, deleteContact, registerInteraction, registerOptOut, revokeOptOut, getActiveOptOut, hasActiveOptOut, ensureOptOuts, optOutContact, INTERACTION_CHANNELS, INTERACTION_CHANNEL_LABELS, normalizeInteractionChannel, repairContactOrigins, firstMailingAt, ensureMailings, saveMailing, setMailingStatus, processMailings, simulateMailing, mailingOccurrence, mailingBlock, ensureExtensions, saveIntake, activateIntake, applyIntake, retryIntake, DONOR_STATUSES, enrolled, suspendedPeriod, changeStatus, validDate, segmentContacts, addToList, receiptSnapshot, sendReceipt, reportData, AUTO_EVENTS, ensureAutomations, saveAutomation, setAutomationActive, queueAutomations, processAutomations, retryAutomation, cancelAutomationRuns, renderAutomationMessage, LOSS_STAGES, lossStage, moveLoss, LOSS_REASONS, outsideCadence, exitCadence, resumeCadence, repairLegacyHistory, STAGES, ORIGINS, INBOUND_ONLY_ORIGINS, inboundOnly, DESTINATIONS, uid, today, month, emailValid, documentValid, validateContact, audit, move, convert, payment, pending, reconcile, parseCSV, importRows, send, createEmptyState }; if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.CRM = api;
 })(globalThis);

@@ -1185,16 +1185,25 @@ export function createCRMController(model) {
   function bindOriginDirection() {
     const origin = $f("[name=origin]"),
       direction = $f("[name=funnel]");
+    const valid = (value) => ["Inbound", "Outbound"].includes(value);
+    let lastManualFunnel = valid(direction.value) ? direction.value : "Inbound";
+    let wasInboundOnly = false;
     const update = () => {
-      const inboundOnly = ["Site", "Instagram"].includes(origin.value),
-        value = inboundOnly ? "Inbound" : direction.value;
+      const inboundOnly = D.inboundOnly(origin.value);
+      if (!inboundOnly && !wasInboundOnly && valid(direction.value))
+        lastManualFunnel = direction.value;
       direction.markup = ["Inbound", "Outbound"]
         .map((v) => `<option value="${v}">${v}</option>`)
         .join("");
-      direction.value = value;
+      direction.value = inboundOnly ? "Inbound" : lastManualFunnel;
       direction.disabled = inboundOnly;
+      wasInboundOnly = inboundOnly;
     };
     origin.onchange = update;
+    direction.onchange = () => {
+      if (!D.inboundOnly(origin.value) && valid(direction.value))
+        lastManualFunnel = direction.value;
+    };
     update();
   }
   function moveLossForm(id) {
@@ -1837,7 +1846,7 @@ export function createCRMController(model) {
         c.type,
       )}${field("E-mail", "email", c.email, "email", 'maxlength="150"')}${field("Telefone / WhatsApp", "phone", c.phone, "tel", 'maxlength="16" placeholder="(86) 99999-9999"')}${field("CPF / CNPJ (opcional)", "document", c.document, "text", 'inputmode="numeric" maxlength="18"')}<div class="full"><small>Informe pelo menos um e-mail ou telefone para mantermos esse laço.</small></div></div>`,
       (d) => {
-        const merged = { ...c, ...d };
+        const merged = { ...c, ...d, email: String(d.email ?? "").trim() };
         D.validateContact(merged, state.contacts, id, true);
         contactStepTwo(id, merged);
       },
@@ -1870,14 +1879,17 @@ export function createCRMController(model) {
     $f("[name=type]").onchange = () => doc.oninput();
   }
   function contactStepTwo(id, c) {
+    const existing = state.contacts.find((contact) => contact.id === id);
     formModal(
       "Onde começa esse caminho?",
-      `<div class="step-label">2 de 2 · Origem e relacionamento</div><div class="notice green">${esc(c.name)} · ${esc(c.email || c.phone)}</div><div class="form-grid">${selectField("Origem", "origin", D.ORIGINS, c.origin)}${selectField("Classificação", "funnel", ["Inbound", "Outbound"], c.funnel)}${selectField(
-        "Etapa inicial",
-        "stage",
-        D.STAGES.map((s, i) => [i, s]),
-        c.stage,
-      )}${user.role === "Administrador"
+      `<div class="step-label">2 de 2 · Origem e relacionamento</div><div class="notice green">${esc(c.name)} · ${esc(c.email || c.phone)}</div><div class="form-grid">${selectField("Origem", "origin", D.ORIGINS, c.origin)}${selectField("Classificação", "funnel", ["Inbound", "Outbound"], c.funnel)}${existing
+        ? `<div class="full"><small>Etapa atual: ${esc(D.STAGES[existing.stage])}. Para movimentar a etapa, use o funil.</small></div>`
+        : selectField(
+          "Etapa inicial",
+          "stage",
+          D.STAGES.map((s, i) => [i, s]),
+          c.stage,
+        )}${user.role === "Administrador"
         ? selectField(
           "Operador responsável",
           "owner",
@@ -1890,18 +1902,15 @@ export function createCRMController(model) {
         const merged = {
           ...c,
           ...d,
-          funnel: ["Site", "Instagram"].includes(d.origin)
+          email: String(d.email ?? c.email ?? "").trim(),
+          funnel: D.inboundOnly(d.origin || c.origin)
             ? "Inbound"
-            : d.funnel,
-          stage: Number(d.stage),
+            : (d.funnel ?? c.funnel),
+          stage: existing ? existing.stage : Number(d.stage ?? c.stage),
           owner: d.owner || c.owner,
         };
         D.validateContact(merged, state.contacts, id);
-        const existing = state.contacts.find((c) => c.id === id);
         if (existing) {
-          if (D.outsideCadence(existing) && merged.stage !== existing.stage)
-            throw Error("Retome a cadência antes de mover a etapa.");
-          const oldStage = existing.stage;
           if (
             existing.origin !== merged.origin ||
             existing.funnel !== merged.funnel
@@ -1919,8 +1928,16 @@ export function createCRMController(model) {
               " / " +
               merged.funnel,
             );
-          Object.assign(existing, merged, { stage: oldStage });
-          D.move(state, user, id, merged.stage);
+          Object.assign(existing, {
+            name: merged.name,
+            email: merged.email,
+            phone: merged.phone,
+            document: merged.document,
+            type: merged.type,
+            origin: merged.origin,
+            funnel: merged.funnel,
+            owner: merged.owner,
+          });
           D.audit(state, user, "Cadastro atualizado", id);
         } else {
           merged.id = D.uid();
@@ -1928,7 +1945,6 @@ export function createCRMController(model) {
           merged.history = [];
           merged.optOut = false;
           state.contacts.unshift(merged);
-          save();
           D.audit(
             state,
             user,
@@ -1940,14 +1956,22 @@ export function createCRMController(model) {
         save();
         closeModal();
         render();
-        profile(existing?.id || merged.id);
+        profile(existing ? existing.id : merged.id);
         toast("Relacionamento salvo com carinho.");
       },
       "Salvar contato",
     );
     $("[data-action=contact-back]").onclick = (e) => {
       e.stopPropagation();
-      contactForm(id, c);
+      const draft = Object.fromEntries(runtime.formEntries($("#modal-form")));
+      contactForm(id, {
+        ...c,
+        ...draft,
+        funnel: D.inboundOnly(draft.origin || c.origin)
+          ? "Inbound"
+          : (draft.funnel ?? c.funnel),
+        stage: draft.stage ?? c.stage,
+      });
     };
     bindOriginDirection();
   }
@@ -2402,9 +2426,7 @@ export function createCRMController(model) {
         intakeActionsForm(id, {
           ...r,
           ...d,
-          direction: ["Site", "Instagram"].includes(d.origin)
-            ? "Inbound"
-            : d.funnel,
+          direction: D.inboundOnly(d.origin) ? "Inbound" : d.funnel,
         }),
       "Continuar",
     );

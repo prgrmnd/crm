@@ -1,5 +1,4 @@
 import D from "./domain.cjs";
-import { canDeleteContact, deleteContact } from "./contact-service.ts";
 
 export function createCRMController(model) {
   const { view, runtime } = model;
@@ -181,10 +180,64 @@ export function createCRMController(model) {
     serverContacts = null,
     serverTotal = null,
     serverTotalPages = 1,
+    serverUsers = null,
+    activeProfileContact = null,
+    serverContactCache = new Map(),
     currentContactsReqId = 0,
     lastContactsRequestKey = "",
     lastActivity = Date.now(),
     lastSessionTouch = 0;
+
+  const UUID_PATTERN =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  function isUuid(value) {
+    return typeof value === "string" && UUID_PATTERN.test(value);
+  }
+  function generateIdempotencyKey() {
+    if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+    return "00000000-0000-4000-8000-" + Date.now().toString(16).padStart(12, "0").slice(-12);
+  }
+  function availableUsers() {
+    return Array.isArray(serverUsers) && serverUsers.length > 0
+      ? serverUsers
+      : state?.users || [];
+  }
+  function resolveOwnerName(c) {
+    if (!c) return "—";
+    if (c.ownerName) return c.ownerName;
+    return availableUsers().find((u) => u.id === c.owner)?.name || "—";
+  }
+  function findContactById(id) {
+    if (!id) return null;
+    if (activeProfileContact && activeProfileContact.id === id) {
+      return activeProfileContact;
+    }
+    if (serverContactCache.has(id)) {
+      return serverContactCache.get(id);
+    }
+    const fromServer = serverContacts?.find((c) => c.id === id);
+    if (fromServer) return fromServer;
+    return state?.contacts?.find((c) => c.id === id) || null;
+  }
+  async function fetchServerUsers() {
+    if (!user || typeof fetch !== "function") return;
+    try {
+      const res = await fetch("/api/users?ativo=true", { cache: "no-store" });
+      if (res.status === 401) {
+        logout("Sua sessão expirou. Entre novamente.");
+        return;
+      }
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.users)) {
+          serverUsers = data.users;
+          render();
+        }
+      }
+    } catch {
+      // Mantém usuários disponíveis em memória em caso de falha transitória.
+    }
+  }
 
   function effectiveContactsTab() {
     return page === "donors" ? "donors" : tab;
@@ -201,11 +254,11 @@ export function createCRMController(model) {
       stage: filters.stage !== undefined ? String(filters.stage) : "",
     };
   }
-  async function fetchServerContacts() {
+  async function fetchServerContacts(force = false) {
     if (!user || typeof fetch !== "function") return;
     const effectiveTab = effectiveContactsTab();
     const reqKey = `${contactPage}|${effectiveTab}|${page}|${filters.q}|${filters.origin}|${filters.owner}|${filters.period}|${filters.funnel}|${filters.status}|${filters.stage}`;
-    if (reqKey === lastContactsRequestKey && serverContacts !== null && !contactsError) {
+    if (!force && reqKey === lastContactsRequestKey && serverContacts !== null && !contactsError) {
       return;
     }
     const reqId = ++currentContactsReqId;
@@ -221,8 +274,16 @@ export function createCRMController(model) {
         ...contactFilterQueryParams(),
       });
 
-      const res = await fetch(`/api/contacts?${params.toString()}`);
+      const res = await fetch(`/api/contacts?${params.toString()}`, {
+        cache: "no-store",
+      });
       if (reqId !== currentContactsReqId) return;
+
+      if (res.status === 401) {
+        contactsLoading = false;
+        logout("Sua sessão expirou. Entre novamente.");
+        return;
+      }
 
       if (res.ok) {
         const data = await res.json();
@@ -236,15 +297,8 @@ export function createCRMController(model) {
         contactsLoading = false;
         contactsError = null;
 
-        if (state && Array.isArray(state.contacts)) {
-          for (const sc of serverContacts) {
-            const idx = state.contacts.findIndex((c) => c.id === sc.id);
-            if (idx >= 0) {
-              state.contacts[idx] = { ...state.contacts[idx], ...sc };
-            } else {
-              state.contacts.push(sc);
-            }
-          }
+        for (const sc of serverContacts) {
+          serverContactCache.set(sc.id, sc);
         }
         render();
       } else {
@@ -325,6 +379,13 @@ export function createCRMController(model) {
   function logout(message) {
     const hadSession = Boolean(user);
     selectedContacts.clear();
+    serverContacts = null;
+    serverTotal = null;
+    serverTotalPages = 1;
+    serverUsers = null;
+    activeProfileContact = null;
+    serverContactCache.clear();
+    lastContactsRequestKey = "";
     user = null;
     closeModal();
     render();
@@ -513,7 +574,7 @@ export function createCRMController(model) {
   function filtersHTML(extra = "", period = false) {
     return `<div class="filters"><div class="search">${icon("search")}<input type="search" id="search" aria-label="Buscar por nome, e-mail, telefone ou documento" placeholder="Buscar um relacionamento…" value="${esc(filters.q)}"></div>${select("origin", D.ORIGINS, filters.origin, "Todas as origens")}${select(
       "owner",
-      state.users.map((u) => [u.id, u.name]),
+      availableUsers().map((u) => [u.id, u.name]),
       filters.owner,
       "Todos os operadores",
     )}${period ? `<input type="month" name="period" value="${esc(filters.period)}" aria-label="Mês de cadastro">` : ""}${extra}${Object.values(filters).some(Boolean) ? button("Limpar filtros", "clear", "", "quiet") : ""}</div>`;
@@ -1292,15 +1353,13 @@ export function createCRMController(model) {
   }
   function cleanContactSelection() {
     selectedContacts = new Set(
-      [...selectedContacts].filter((id) =>
-        emailEligible(state.contacts.find((c) => c.id === id)),
-      ),
+      [...selectedContacts].filter((id) => emailEligible(findContactById(id))),
     );
   }
   function applyCheckboxAction(a, id, b) {
     switch (a) {
       case "select-contact":
-        if (emailEligible(state.contacts.find((c) => c.id === id))) {
+        if (emailEligible(findContactById(id))) {
           if (b.checked) selectedContacts.add(id);
           else selectedContacts.delete(id);
         }
@@ -1310,6 +1369,31 @@ export function createCRMController(model) {
         });
         return true;
       case "select-filtered": {
+        const isDonors = page === "donors";
+        if (!isDonors && serverContacts !== null && typeof fetch === "function") {
+          const checked = b.checked;
+          const params = new URLSearchParams({
+            page: "1",
+            pageSize: "1000",
+            ...contactFilterQueryParams(),
+          });
+          fetch(`/api/contacts?${params.toString()}`, { cache: "no-store" })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+              if (!data || !Array.isArray(data.contacts)) return;
+              for (const sc of data.contacts) {
+                serverContactCache.set(sc.id, sc);
+                if (emailEligible(sc)) {
+                  if (checked) selectedContacts.add(sc.id);
+                  else selectedContacts.delete(sc.id);
+                }
+              }
+              render();
+              $("[data-action=select-filtered]")?.focus({ preventScroll: true });
+            })
+            .catch(() => {});
+          return true;
+        }
         const eligible = visibleContacts().filter(emailEligible);
         eligible.forEach((c) =>
           b.checked
@@ -1336,7 +1420,7 @@ export function createCRMController(model) {
         return true;
       }
       case "email-pick":
-        if (emailEligible(state.contacts.find((c) => c.id === id))) {
+        if (emailEligible(findContactById(id))) {
           if (b.checked) selectedContacts.add(id);
           else selectedContacts.delete(id);
         }
@@ -1357,15 +1441,26 @@ export function createCRMController(model) {
   }
   function selectionToolbar(pageContacts = []) {
     cleanContactSelection();
+    const isUsingServer = page !== "donors" && serverContacts !== null;
     const pageEligible = pageContacts.filter(emailEligible),
       allPageSelected =
         pageEligible.length > 0 &&
         pageEligible.every((c) => selectedContacts.has(c.id));
-    const allFiltered = visibleContacts().filter(emailEligible),
-      allFilteredSelected =
-        allFiltered.length > 0 &&
+    const allFiltered = isUsingServer
+      ? pageEligible
+      : visibleContacts().filter(emailEligible);
+    const filteredCount = isUsingServer
+      ? typeof serverTotal === "number"
+        ? serverTotal
+        : pageEligible.length
+      : allFiltered.length;
+    const allFilteredSelected = isUsingServer
+      ? filteredCount > 0 &&
+        selectedContacts.size >= filteredCount &&
+        allPageSelected
+      : allFiltered.length > 0 &&
         allFiltered.every((c) => selectedContacts.has(c.id));
-    return `<div class="contact-selection-bar"><label class="select-filtered"><input type="checkbox" data-action="select-filtered" ${allFilteredSelected ? "checked" : ""} ${allFiltered.length ? "" : "disabled"} aria-label="Selecionar todos os contatos elegíveis deste filtro"> Selecionar todos do filtro <small>(${allFiltered.length})</small></label><label class="select-page-wrap" style="display:inline-flex;gap:6px;align-items:center;font-size:11px;cursor:pointer"><input type="checkbox" data-action="select-page" ${allPageSelected ? "checked" : ""} ${pageEligible.length ? "" : "disabled"} aria-label="Selecionar todos os contatos da página atual"> Selecionar página atual <small>(${pageEligible.length})</small></label><span class="selection-count" aria-live="polite">${selectedContacts.size} ${selectedContacts.size === 1 ? "selecionado" : "selecionados"}</span><div class="selection-actions">${selectedContacts.size ? button("Limpar seleção", "clear-selection", "", "quiet small") : ""}${button("Redigir e-mail", "bulk-email", "", "small", "mail")}</div></div>`;
+    return `<div class="contact-selection-bar"><label class="select-filtered"><input type="checkbox" data-action="select-filtered" ${allFilteredSelected ? "checked" : ""} ${filteredCount ? "" : "disabled"} aria-label="Selecionar todos os contatos elegíveis deste filtro"> Selecionar todos do filtro <small>(${filteredCount})</small></label><label class="select-page-wrap" style="display:inline-flex;gap:6px;align-items:center;font-size:11px;cursor:pointer"><input type="checkbox" data-action="select-page" ${allPageSelected ? "checked" : ""} ${pageEligible.length ? "" : "disabled"} aria-label="Selecionar todos os contatos da página atual"> Selecionar página atual <small>(${pageEligible.length})</small></label><span class="selection-count" aria-live="polite">${selectedContacts.size} ${selectedContacts.size === 1 ? "selecionado" : "selecionados"}</span><div class="selection-actions">${selectedContacts.size ? button("Limpar seleção", "clear-selection", "", "quiet small") : ""}${button("Redigir e-mail", "bulk-email", "", "small", "mail")}</div></div>`;
   }
   function contacts() {
     const isDonors = page === "donors";
@@ -1503,7 +1598,7 @@ export function createCRMController(model) {
         ? `<div class="table-wrap"><table><thead><tr><th class="checkbox-cell"><input type="checkbox" data-action="select-page" aria-label="Selecionar todos os contatos da página atual" ${allPageSelected ? "checked" : ""} ${pageEligible.length ? "" : "disabled"}><span class="sr-only">Selecionar destinatário</span></th><th>Relacionamento</th><th>Origem</th><th>${isDonors ? "Compromisso / recebido" : "Etapa / compromisso"}</th><th>Status</th><th>Responsável</th><th></th></tr></thead><tbody>${pageItems
           .map(
             (c) =>
-              `<tr class="${selectedContacts.has(c.id) ? "selected-row" : ""}"><td class="checkbox-cell"><input type="checkbox" data-action="select-contact" data-id="${c.id}" aria-label="Selecionar ${esc(c.name)} para enviar e-mail" ${selectedContacts.has(c.id) ? "checked" : ""} ${emailEligible(c) ? "" : `disabled title="${c.optOut ? "Contato descadastrado de e-mails" : "Sem e-mail válido"}"`}></td><td>${contactCell(c)}</td><td>${esc(c.origin)}<small style="display:block">${c.funnel}</small></td><td>${c.plan ? "Compromisso: " + money(c.plan.amount) + '<small style="display:block">' + c.plan.mode + " · Recebido: " + money(total(state.payments.filter((p) => p.contactId === c.id))) + "</small>" : esc(D.STAGES[c.stage])}</td><td>${statusBadge(c)} ${c.optOut ? badge("Descadastrado", "gray") : ""}</td><td>${esc(state.users.find((u) => u.id === c.owner)?.name || "—")}</td><td><button class="icon-button" data-action="profile" data-id="${c.id}" aria-label="Abrir ficha de ${esc(c.name)}">${icon("arrow")}</button></td></tr>`,
+              `<tr class="${selectedContacts.has(c.id) ? "selected-row" : ""}"><td class="checkbox-cell"><input type="checkbox" data-action="select-contact" data-id="${c.id}" aria-label="Selecionar ${esc(c.name)} para enviar e-mail" ${selectedContacts.has(c.id) ? "checked" : ""} ${emailEligible(c) ? "" : `disabled title="${c.optOut ? "Contato descadastrado de e-mails" : "Sem e-mail válido"}"`}></td><td>${contactCell(c)}</td><td>${esc(c.origin)}<small style="display:block">${c.funnel}</small></td><td>${c.plan ? "Compromisso: " + money(c.plan.amount) + '<small style="display:block">' + c.plan.mode + " · Recebido: " + money(total(state.payments.filter((p) => p.contactId === c.id))) + "</small>" : esc(D.STAGES[c.stage])}</td><td>${statusBadge(c)} ${c.optOut ? badge("Descadastrado", "gray") : ""}</td><td>${esc(resolveOwnerName(c))}</td><td><button class="icon-button" data-action="profile" data-id="${c.id}" aria-label="Abrir ficha de ${esc(c.name)}">${icon("arrow")}</button></td></tr>`,
           )
           .join(
             "",
@@ -1661,7 +1756,7 @@ export function createCRMController(model) {
   }
   function renderLogin() {
     $("#app").markup =
-      `<div class="login"><section class="login-story">${brand()}<div><div class="eyebrow" style="margin-top:50px">Relacionamentos que transformam</div><h1>A esperança floresce quando cuidamos dos nossos laços.</h1><p>Um espaço para acolher, cultivar relacionamentos e acompanhar cada gesto de generosidade.</p><div class="art">${art()}</div></div><footer>Centro Espírita e Obras Sociais · Parnaíba, PI</footer></section><section class="login-content"><div class="login-theme">${themeButton()}</div><div class="login-form"><div class="eyebrow">Bem-vindo ao nosso espaço</div><h2>Que bom ter você aqui.</h2><p>Entre para acompanhar os relacionamentos e contribuições da nossa comunidade.</p><form id="auth-form"><div class="error" role="alert"></div>${field("Seu e-mail", "email", "", "email", 'required autocomplete="username"')}${field("Sua senha", "password", "", "password", 'required autocomplete="current-password"')}<button class="btn" type="submit">Entrar no nosso espaço ${icon("arrow")}</button></form></div></section></div>`;
+      `<div class="login"><section class="login-story">${brand()}<div><div class="eyebrow" style="margin-top:50px">Relacionamentos que transformam</div><h1>A esperança floresce quando cuidamos dos nossos laços.</h1><p>Um espaço para acolher, cultivar relacionamentos e acompanhar cada gesto de generosidade.</p><div class="art">${art()}</div></div><footer>Centro Espírita e Obras Sociais · Parnaíba, PI</footer></section><section class="login-content"><div class="login-theme">${themeButton()}</div><div class="login-form"><div class="eyebrow">Bem-vindo ao nosso espaço</div><h2>Que bom ter você aqui.</h2><p>Entre para acompanhar os relacionamentos e contribuições da nossa comunidade.</p><form id="auth-form"><div class="error" role="alert"></div>${field("Seu e-mail", "email", "", "email", 'required autocomplete="username"')}${field("Sua senha", "password", "", "password", 'required autocomplete="current-password"')}<button class="btn" type="submit">Entrar no nosso espaço ${icon("arrow")}</button></form><div style="text-align:right;margin-top:14px"><button type="button" class="text-link" data-action="recover">Esqueci minha senha</button></div></div></section></div>`;
     $("#auth-form").onsubmit = async (e) => {
       e.preventDefault();
       const f = e.currentTarget,
@@ -1705,6 +1800,7 @@ export function createCRMController(model) {
         D.ensureAutomations(state);
         save();
         render();
+        fetchServerUsers();
       } catch (err) {
         $(".error", f).textContent = err.message;
         btn.disabled = false;
@@ -1821,7 +1917,7 @@ export function createCRMController(model) {
     };
   }
   function contactForm(id = "", draft = null) {
-    const existing = state.contacts.find((c) => c.id === id),
+    const existing = findContactById(id),
       c = draft ||
         existing || {
         name: "",
@@ -1836,7 +1932,7 @@ export function createCRMController(model) {
       };
     formModal(
       existing ? "Editar relacionamento" : "Um novo relacionamento",
-      `<div class="step-label">1 de 2 · Conhecer a pessoa</div><div class="form-grid">${field("Nome completo / razão social *", "name", c.name, "text", 'required maxlength="120"')}${selectField(
+      `<div class="step-label">1 de 2 · Conhecer a pessoa</div><div class="form-grid">${field("Nome completo / razão social *", "name", c.name, "text", 'required maxlength="180"')}${selectField(
         "Tipo de pessoa",
         "type",
         [
@@ -1844,10 +1940,14 @@ export function createCRMController(model) {
           ["PJ", "Pessoa jurídica"],
         ],
         c.type,
-      )}${field("E-mail", "email", c.email, "email", 'maxlength="150"')}${field("Telefone / WhatsApp", "phone", c.phone, "tel", 'maxlength="16" placeholder="(86) 99999-9999"')}${field("CPF / CNPJ (opcional)", "document", c.document, "text", 'inputmode="numeric" maxlength="18"')}<div class="full"><small>Informe pelo menos um e-mail ou telefone para mantermos esse laço.</small></div></div>`,
+      )}${field("E-mail", "email", c.email, "email", 'maxlength="254"')}${field("Telefone / WhatsApp", "phone", c.phone, "tel", 'maxlength="16" placeholder="(86) 99999-9999"')}${field("CPF / CNPJ (opcional)", "document", c.document, "text", 'inputmode="numeric" maxlength="18"')}<div class="full"><small>Informe pelo menos um e-mail ou telefone para mantermos esse laço.</small></div></div>`,
       (d) => {
         const merged = { ...c, ...d, email: String(d.email ?? "").trim() };
-        D.validateContact(merged, state.contacts, id, true);
+        const knownContacts =
+          Array.isArray(serverContacts) && serverContacts.length > 0
+            ? [...serverContactCache.values()]
+            : state.contacts;
+        D.validateContact(merged, knownContacts, id, true);
         contactStepTwo(id, merged);
       },
       "Continuar",
@@ -1879,7 +1979,8 @@ export function createCRMController(model) {
     $f("[name=type]").onchange = () => doc.oninput();
   }
   function contactStepTwo(id, c) {
-    const existing = state.contacts.find((contact) => contact.id === id);
+    const existing = findContactById(id);
+    const activeOperators = availableUsers().filter((u) => u.active !== false);
     formModal(
       "Onde começa esse caminho?",
       `<div class="step-label">2 de 2 · Origem e relacionamento</div><div class="notice green">${esc(c.name)} · ${esc(c.email || c.phone)}</div><div class="form-grid">${selectField("Origem", "origin", D.ORIGINS, c.origin)}${selectField("Classificação", "funnel", ["Inbound", "Outbound"], c.funnel)}${existing
@@ -1893,12 +1994,12 @@ export function createCRMController(model) {
         ? selectField(
           "Operador responsável",
           "owner",
-          state.users.filter((u) => u.active).map((u) => [u.id, u.name]),
+          activeOperators.map((u) => [u.id, u.name]),
           c.owner,
         )
         : ""
       }</div>${button("Voltar aos dados", "contact-back", id, "quiet")}`,
-      (d) => {
+      async (d) => {
         const merged = {
           ...c,
           ...d,
@@ -1907,56 +2008,62 @@ export function createCRMController(model) {
             ? "Inbound"
             : (d.funnel ?? c.funnel),
           stage: existing ? existing.stage : Number(d.stage ?? c.stage),
-          owner: d.owner || c.owner,
+          owner: d.owner || c.owner || user.id,
         };
-        D.validateContact(merged, state.contacts, id);
-        if (existing) {
-          if (
-            existing.origin !== merged.origin ||
-            existing.funnel !== merged.funnel
-          )
-            D.audit(
-              state,
-              user,
-              "Origem e direção alteradas",
-              id,
-              existing.origin +
-              " / " +
-              existing.funnel +
-              " → " +
-              merged.origin +
-              " / " +
-              merged.funnel,
-            );
-          Object.assign(existing, {
-            name: merged.name,
-            email: merged.email,
-            phone: merged.phone,
-            document: merged.document,
-            type: merged.type,
-            origin: merged.origin,
-            funnel: merged.funnel,
-            owner: merged.owner,
-          });
-          D.audit(state, user, "Cadastro atualizado", id);
-        } else {
-          merged.id = D.uid();
-          merged.created = new Date().toISOString();
-          merged.history = [];
-          merged.optOut = false;
-          state.contacts.unshift(merged);
-          D.audit(
-            state,
-            user,
-            "Contato cadastrado",
-            merged.id,
-            merged.origin + " · " + merged.funnel,
-          );
+        const knownContacts =
+          Array.isArray(serverContacts) && serverContacts.length > 0
+            ? [...serverContactCache.values()]
+            : state.contacts;
+        D.validateContact(merged, knownContacts, id);
+
+        const payload = {
+          name: merged.name,
+          type: merged.type,
+          email: merged.email,
+          phone: merged.phone,
+          document: merged.document,
+          origin: merged.origin,
+          funnel: merged.funnel,
+          ...(existing
+            ? { version: existing.version }
+            : { stage: merged.stage }),
+          ...(user.role === "Administrador" ? { owner: merged.owner } : {}),
+        };
+
+        const url = existing ? `/api/contacts/${id}` : "/api/contacts";
+        const method = existing ? "PATCH" : "POST";
+        const headers = {
+          "content-type": "application/json",
+          ...(method === "POST"
+            ? { "Idempotency-Key": generateIdempotencyKey() }
+            : {}),
+        };
+
+        const response = await fetch(url, {
+          method,
+          headers,
+          body: JSON.stringify(payload),
+        });
+        if (response.status === 401) {
+          logout("Sua sessão expirou. Entre novamente.");
+          return;
         }
-        save();
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.contact) {
+          throw Error(result.error || "Não foi possível salvar o contato.");
+        }
+
+        const savedContact = result.contact;
+        serverContactCache.set(savedContact.id, savedContact);
+        activeProfileContact = savedContact;
+        lastContactsRequestKey = "";
         closeModal();
-        render();
-        profile(existing ? existing.id : merged.id);
+        if (page === "contacts") {
+          await fetchServerContacts(true);
+        } else {
+          render();
+        }
+        await profile(savedContact.id);
         toast("Relacionamento salvo com carinho.");
       },
       "Salvar contato",
@@ -1992,20 +2099,33 @@ export function createCRMController(model) {
     return null;
   }
 
-  function profile(id) {
-    const c = state.contacts.find((c) => c.id === id);
-    if (!c) throw Error("Contato não encontrado.");
+  function renderProfileModal(c) {
+    const id = c.id;
     const ps = state.payments.filter((p) => p.contactId === id);
-    const optOutRec = getActiveOptOutRec(state, id);
-    const hasOptOut = !!(optOutRec || c.optOut);
-    const optOutInfo = optOutRec
-      ? `Contato com opt-out ativo${optOutRec.at || optOutRec.data_hora ? " · " + (optOutRec.at || optOutRec.data_hora) : ""}${optOutRec.actorName || optOutRec.registrado_por ? " · Responsável: " + (optOutRec.actorName || state.users.find(u=>u.id===(optOutRec.registrado_por||optOutRec.registeredBy||optOutRec.actor))?.name || optOutRec.registrado_por || "") : ""}`
-      : c.optOut
-        ? "Contato com opt-out ativo"
-        : "";
+    const optOutRec = c.optOutDetails || getActiveOptOutRec(state, id);
+    const hasOptOut = !!(c.optOut || optOutRec);
+    const optOutAt = optOutRec?.at || optOutRec?.data_hora;
+    const optOutActor =
+      optOutRec?.actorName ||
+      availableUsers().find(
+        (u) =>
+          u.id ===
+          (optOutRec?.actorId ||
+            optOutRec?.registrado_por ||
+            optOutRec?.registeredBy ||
+            optOutRec?.actor),
+      )?.name ||
+      "";
+    const optOutReason =
+      optOutRec?.reason ||
+      optOutRec?.motivo ||
+      optOutRec?.observacao ||
+      optOutRec?.note ||
+      "";
+    const history = Array.isArray(c.history) ? c.history : [];
     modal(
       "Ficha de relacionamento",
-      `<div class="profile-hero">${avatar(c)}<div><h2>${esc(c.name)}</h2><p style="margin-top:7px">${statusBadge(c)} ${badge(c.type, "gold")}  ${hasOptOut ? badge("Descadastrado", "gray") : ""}</p></div></div>${hasOptOut ? `<div class="notice red" style="margin-bottom:18px"><strong>Contato com opt-out ativo</strong>${optOutRec?.at || optOutRec?.data_hora ? " · " + date(optOutRec.at || optOutRec.data_hora) + " " + time(optOutRec.at || optOutRec.data_hora) : c.optOut ? "" : ""}${(optOutRec?.actorName || optOutRec?.registrado_por || optOutRec?.registeredBy) ? " · " + esc(optOutRec.actorName || state.users.find(u=>u.id===(optOutRec.registrado_por||optOutRec.registeredBy||optOutRec.actor))?.name || optOutRec.registrado_por || optOutRec.registeredBy || "") : ""}${optOutRec?.motivo || optOutRec?.observacao || optOutRec?.reason || optOutRec?.note ? "<br><small>" + esc(optOutRec.motivo || optOutRec.observacao || optOutRec.reason || optOutRec.note) + "</small>" : ""}</div>` : ""}<div class="profile-grid"><div><dl class="details"><div><dt>E-mail</dt><dd>${esc(c.email || "Não informado")}</dd></div><div><dt>Telefone</dt><dd>${esc(c.phone || "Não informado")}</dd></div><div><dt>CPF / CNPJ</dt><dd>${esc(c.document || "Não informado")}</dd></div><div><dt>Origem</dt><dd>${esc(c.origin)} · ${c.funnel}</dd></div><div><dt>Responsável</dt><dd>${esc(state.users.find((u) => u.id === c.owner)?.name || "—")}</dd></div><div><dt>Desde</dt><dd>${date(c.created)}</dd></div></dl><div class="notice green"><small>Etapa atual</small><p>${D.STAGES[c.stage]}</p>${D.outsideCadence(c) ? `<p>Etapa de perdas: ${esc(D.LOSS_STAGES[D.lossStage(c)])}</p>${c.cadenceExit.followUpDate ? `<p>Retomada agendada: ${date(c.cadenceExit.followUpDate)}</p>` : ""}<p><b>Fora da cadência</b> · ${esc(c.cadenceExit.reason)}</p><p>${esc(c.cadenceExit.note)}</p><p>Saída: ${date(c.cadenceExit.date)} · ${esc(c.cadenceExit.actorName)}</p><p>Última etapa: ${esc(D.STAGES[c.cadenceExit.stage])}</p>` : ""}${c.plan ? `<p style="margin-top:10px">Compromisso: <b>${money(c.plan.amount)}</b> · ${c.plan.mode}${c.plan.due ? " · Dia " + c.plan.due : ""}</p>` : ""}</div>${enrollmentInfo(c)}${intakeSummary(c)}${contactTasks(c)}<div class="profile-actions">${button("Editar", "contact", id, "secondary small", "edit")}${D.outsideCadence(c) ? button("Mover etapa de perdas", "loss-move", id, "secondary small") + button("Retomar cadência", "cadence-resume", id, "secondary small") : button("Registrar perda", "cadence-exit", id, "secondary small")}${!c.plan && !D.outsideCadence(c) ? button("Mover etapa", "move", id, "secondary small", "funnel") + button("Converter em doador", "convert", id, "small", "heart") : c.plan ? button("Registrar doação", "payment", id, "small", "plus") + button("Alterar status", "donor-status", id, "secondary small") : ""}${button("Registrar interação", "interaction", id, "secondary small", "plus")}${button("Registrar resposta", "response", id, "secondary small", "mail")}${c.plan ? button("Comprovante de adesão", "adherence", id, "quiet small", "file") : ""}${!hasOptOut && c.email ? button("Enviar mensagem", "contact-mail", id, "quiet small", "mail") : ""}${!hasOptOut ? button("Registrar opt-out", "optout", id, "secondary small") : ""}${user.role === "Administrador" ? button("Excluir contato", "delete-contact", id, "danger small") : ""}</div>${ps.length
+      `<div class="profile-hero">${avatar(c)}<div><h2>${esc(c.name)}</h2><p style="margin-top:7px">${statusBadge(c)} ${badge(c.type, "gold")}  ${hasOptOut ? badge("Descadastrado", "gray") : ""}</p></div></div>${hasOptOut ? `<div class="notice red" style="margin-bottom:18px"><strong>Contato com opt-out ativo</strong>${optOutAt ? " · " + date(optOutAt) + " " + time(optOutAt) : ""}${optOutActor ? " · " + esc(optOutActor) : ""}${optOutReason ? "<br><small>" + esc(optOutReason) + "</small>" : ""}</div>` : ""}<div class="profile-grid"><div><dl class="details"><div><dt>E-mail</dt><dd>${esc(c.email || "Não informado")}</dd></div><div><dt>Telefone</dt><dd>${esc(c.phone || "Não informado")}</dd></div><div><dt>CPF / CNPJ</dt><dd>${esc(c.document || "Não informado")}</dd></div><div><dt>Origem</dt><dd>${esc(c.origin)} · ${c.funnel}</dd></div><div><dt>Responsável</dt><dd>${esc(resolveOwnerName(c))}</dd></div><div><dt>Desde</dt><dd>${date(c.created)}</dd></div></dl><div class="notice green"><small>Etapa atual</small><p>${D.STAGES[c.stage]}</p>${D.outsideCadence(c) ? `<p>Etapa de perdas: ${esc(D.LOSS_STAGES[D.lossStage(c)])}</p>${c.cadenceExit.followUpDate ? `<p>Retomada agendada: ${date(c.cadenceExit.followUpDate)}</p>` : ""}<p><b>Fora da cadência</b> · ${esc(c.cadenceExit.reason)}</p><p>${esc(c.cadenceExit.note)}</p><p>Saída: ${date(c.cadenceExit.date)} · ${esc(c.cadenceExit.actorName)}</p><p>Última etapa: ${esc(D.STAGES[c.cadenceExit.stage])}</p>` : ""}${c.plan ? `<p style="margin-top:10px">Compromisso: <b>${money(c.plan.amount)}</b> · ${c.plan.mode}${c.plan.due ? " · Dia " + c.plan.due : ""}</p>` : ""}</div>${enrollmentInfo(c)}${intakeSummary(c)}${contactTasks(c)}<div class="profile-actions">${button("Editar", "contact", id, "secondary small", "edit")}${D.outsideCadence(c) ? button("Mover etapa de perdas", "loss-move", id, "secondary small") + button("Retomar cadência", "cadence-resume", id, "secondary small") : button("Registrar perda", "cadence-exit", id, "secondary small")}${!c.plan && !D.outsideCadence(c) ? button("Mover etapa", "move", id, "secondary small", "funnel") + button("Converter em doador", "convert", id, "small", "heart") : c.plan ? button("Registrar doação", "payment", id, "small", "plus") + button("Alterar status", "donor-status", id, "secondary small") : ""}${button("Registrar interação", "interaction", id, "secondary small", "plus")}${button("Registrar resposta", "response", id, "secondary small", "mail")}${c.plan ? button("Comprovante de adesão", "adherence", id, "quiet small", "file") : ""}${!hasOptOut && c.email ? button("Enviar mensagem", "contact-mail", id, "quiet small", "mail") : ""}${!hasOptOut ? button("Registrar opt-out", "optout", id, "secondary small") : ""}${user.role === "Administrador" ? button("Excluir contato", "delete-contact", id, "danger small") : ""}</div>${ps.length
         ? `<h3 style="margin:22px 0 8px">Contribuições · ${money(total(ps))}</h3>${ps
           .slice(0, 4)
           .map(
@@ -2014,10 +2134,59 @@ export function createCRMController(model) {
           )
           .join("")}`
         : ""
-      }</div><div><div class="flex between" style="margin-bottom:22px"><h3>Uma história de relacionamento</h3><small>${c.history.length} registros</small></div><div class="timeline">${c.history.map((e) => `<article class="event"><h3>${esc(e.action)}</h3><p>${esc(e.details)}</p><small>${time(e.at)} · ${esc(e.actorName)}</small></article>`).join("")}</div></div></div>`,
+      }</div><div><div class="flex between" style="margin-bottom:22px"><h3>Uma história de relacionamento</h3><small>${history.length} registros</small></div><div class="timeline">${history.map((e) => `<article class="event"><h3>${esc(e.action)}</h3><p>${esc(e.details)}</p><small>${time(e.at)} · ${esc(e.actorName)}</small></article>`).join("")}</div></div></div>`,
       "",
       true,
     );
+  }
+
+  async function profile(id) {
+    const shouldUseApi =
+      typeof fetch === "function" &&
+      (page === "contacts" || isUuid(id) || serverContactCache.has(id));
+
+    if (shouldUseApi) {
+      try {
+        const res = await fetch(`/api/contacts/${id}`, { cache: "no-store" });
+        if (res.status === 401) {
+          logout("Sua sessão expirou. Entre novamente.");
+          return;
+        }
+        if (res.ok) {
+          const data = await res.json();
+          if (data.contact) {
+            activeProfileContact = data.contact;
+            serverContactCache.set(data.contact.id, data.contact);
+            renderProfileModal(data.contact);
+            return;
+          }
+        }
+        if (res.status === 404) {
+          const fallback = findContactById(id);
+          if (fallback && !isUuid(id)) {
+            renderProfileModal(fallback);
+            return;
+          }
+          toast("Contato não encontrado.", "error");
+          return;
+        }
+        const errData = await res.json().catch(() => ({}));
+        toast(errData.error || "Não foi possível carregar a ficha do contato.", "error");
+        return;
+      } catch (err) {
+        const fallback = findContactById(id);
+        if (fallback) {
+          renderProfileModal(fallback);
+          return;
+        }
+        toast(err.message || "Não foi possível carregar a ficha do contato.", "error");
+        return;
+      }
+    }
+
+    const c = findContactById(id);
+    if (!c) throw Error("Contato não encontrado.");
+    renderProfileModal(c);
   }
   function moveForm(id) {
     const c = state.contacts.find((c) => c.id === id);
@@ -2079,102 +2248,113 @@ export function createCRMController(model) {
     const nowLocal = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     formModal(
       "Cultive esse relacionamento",
-      `${selectField("Como foi o contato?", "channel", ["Telefone", "WhatsApp", "Reunião presencial", "E-mail"], "", "Selecione o canal")}<div class="field"><label for="f-date">Data e hora do contato *</label><input id="f-date" name="date" type="datetime-local" value="${nowLocal}" required max="${nowLocal}"></div><div class="field"><label for="f-summary">Resumo/detalhes *</label><textarea id="f-summary" name="summary" required maxlength="3000" placeholder="Conte o que foi conversado e os próximos passos."></textarea><small class="muted">0 / 3000</small></div><small>Este registro preserva o histórico e identifica o operador responsável.</small>`,
-      (d) => {
-        const payload = {
-          channel: d.channel,
-          date: d.date,
-          summary: d.summary,
-        };
-        if (typeof D.registerInteraction === "function") {
-          try {
-            D.registerInteraction(state, user, id, payload);
-          } catch (err) {
-            if (err.field === "channel") throw Error("Selecione o canal do contato.");
-            if (err.field === "date") throw Error(err.message);
-            if (err.field === "summary") throw Error(err.message);
-            throw err;
-          }
-        } else {
-          if (!d.channel) throw Error("Selecione o canal do contato.");
-          if (!d.date) throw Error("Informe a data e hora do contato.");
-          const interactionDate = new Date(d.date);
-          const now = new Date();
-          if (interactionDate > now) throw Error("A data do contato não pode ser futura.");
-          if (!d.summary || !String(d.summary).trim()) throw Error("Informe o resumo da conversa.");
-          if (String(d.summary).trim().length > 3000) throw Error("O resumo não pode ultrapassar 3000 caracteres.");
-          D.audit(
-            state,
-            user,
-            "Contato por " + d.channel,
-            id,
-            String(d.summary).trim() + "\nData do contato: " + time(interactionDate.toISOString()),
-          );
+      `${selectField("Como foi o contato?", "channel", ["Telefone", "WhatsApp", "Reunião presencial", "E-mail"], "", "Selecione o canal")}<div class="field"><label for="f-date">Data e hora do contato *</label><input id="f-date" name="date" type="datetime-local" value="${nowLocal}" required max="${nowLocal}"></div><div class="field"><label for="f-summary">Resumo/detalhes *</label><textarea id="f-summary" name="summary" required maxlength="3000" placeholder="Conte o que foi conversado e os próximos passos."></textarea><small id="f-summary-count" class="muted">0 / 3000</small></div><small>Este registro preserva o histórico e identifica o operador responsável.</small>`,
+      async (d) => {
+        if (!d.channel) throw Error("Selecione o canal do contato.");
+        if (!d.date) throw Error("Informe a data e hora do contato.");
+        const interactionDate = new Date(d.date);
+        if (Number.isNaN(interactionDate.getTime())) {
+          throw Error("Data/hora inválida.");
         }
-        save();
+        if (interactionDate > new Date()) {
+          throw Error("A data do contato não pode ser futura.");
+        }
+        const summary = String(d.summary ?? "").trim();
+        if (!summary) throw Error("Informe o resumo da conversa.");
+        if (summary.length > 3000) {
+          throw Error("O resumo não pode ultrapassar 3000 caracteres.");
+        }
+
+        const response = await fetch(`/api/contacts/${id}/interacoes`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "Idempotency-Key": generateIdempotencyKey(),
+          },
+          body: JSON.stringify({
+            canal: d.channel,
+            ocorridoEm: interactionDate.toISOString(),
+            resumo: summary,
+          }),
+        });
+        if (response.status === 401) {
+          logout("Sua sessão expirou. Entre novamente.");
+          return;
+        }
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw Error(result.error || "Não foi possível registrar a interação.");
+        }
+
         closeModal();
-        render();
-        profile(id);
+        await profile(id);
         toast("Interação registrada no histórico.");
       },
       "Registrar interação",
     );
-    setTimeout(() => {
-      const summary = document.getElementById("f-summary");
-      const counter = summary?.nextElementSibling;
-      if (summary && counter && counter.tagName === "SMALL") {
-        counter.textContent = summary.value.length + " / 3000";
-        summary.oninput = () => {
-          counter.textContent = summary.value.length + " / 3000";
-        };
-      }
-      const dateInput = document.getElementById("f-date");
-      if (dateInput) {
-        dateInput.max = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-        dateInput.onchange = dateInput.oninput = () => {
-          const now = new Date();
-          const selected = new Date(dateInput.value);
-          if (selected > now) {
-            dateInput.value = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-          }
-        };
-      }
-    }, 0);
+    const summaryEl = $f("#f-summary");
+    const counterEl = $f("#f-summary-count");
+    if (summaryEl && counterEl) {
+      counterEl.textContent = `${summaryEl.value.length} / 3000`;
+      summaryEl.oninput = () => {
+        counterEl.textContent = `${summaryEl.value.length} / 3000`;
+      };
+    }
+    const dateInput = $f("#f-date");
+    if (dateInput) {
+      const updateMax = () =>
+        new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+          .toISOString()
+          .slice(0, 16);
+      dateInput.max = updateMax();
+      dateInput.onchange = dateInput.oninput = () => {
+        const selected = new Date(dateInput.value);
+        if (!Number.isNaN(selected.getTime()) && selected > new Date()) {
+          dateInput.value = updateMax();
+        }
+      };
+    }
   }
   function responseForm(id) {
     formModal(
       "Escutar também faz parte",
       `${selectField("Classificação da resposta", "classification", ["Positiva", "Negativa", "Pedido de descadastro"], "Positiva")}<div class="field"><label for="f-message">Conteúdo da resposta *</label><textarea id="f-message" name="message" required maxlength="3000" placeholder="Registre a resposta recebida."></textarea></div>`,
-      (d) => {
-        if (!d.message.trim()) throw Error("Informe o conteúdo da resposta.");
-        const c = state.contacts.find((c) => c.id === id);
-        if (d.classification === "Pedido de descadastro") {
-          try {
-            if (typeof D.optOutContact === "function") {
-              D.optOutContact(state, user, id, { motivo: d.message });
-            } else if (typeof D.registerOptOut === "function") {
-              D.registerOptOut(state, user, id, { motivo: d.message });
-              c.optOut = true;
-            } else {
-              c.optOut = true;
-            }
-          } catch {
-            c.optOut = true;
-          }
+      async (d) => {
+        const content = String(d.message ?? "").trim();
+        if (!content) throw Error("Informe o conteúdo da resposta.");
+        if (content.length > 3000) {
+          throw Error("O conteúdo da resposta não pode ultrapassar 3000 caracteres.");
         }
-        D.audit(
-          state,
-          user,
-          "Resposta de e-mail: " + d.classification,
-          id,
-          d.message,
-        );
-        save();
+        const isOptOut = d.classification === "Pedido de descadastro";
+        const response = await fetch(`/api/contacts/${id}/respostas`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "Idempotency-Key": generateIdempotencyKey(),
+          },
+          body: JSON.stringify({
+            classificacao: d.classification,
+            conteudo: content,
+          }),
+        });
+        if (response.status === 401) {
+          logout("Sua sessão expirou. Entre novamente.");
+          return;
+        }
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw Error(result.error || "Não foi possível registrar a resposta.");
+        }
+
+        if (isOptOut) {
+          selectedContacts.delete(id);
+          lastContactsRequestKey = "";
+          if (page === "contacts") await fetchServerContacts(true);
+        }
         closeModal();
-        render();
-        profile(id);
+        await profile(id);
         toast(
-          d.classification === "Pedido de descadastro"
+          isOptOut
             ? "Descadastro registrado. Novos envios serão bloqueados."
             : "Resposta registrada.",
         );
@@ -2184,38 +2364,42 @@ export function createCRMController(model) {
   }
 
   function optOutForm(id) {
-    const c = state.contacts.find((c) => c.id === id);
+    const c = findContactById(id);
     if (!c) throw Error("Contato não encontrado.");
     formModal(
       "Registrar opt-out",
       `<p class="notice red">Esta ação é sensível. Ao confirmar, o contato será marcado com opt-out ativo e envios (imediatos e agendados) serão bloqueados.</p><div class="field"><label for="f-motivo">Motivo/observação (opcional)</label><textarea id="f-motivo" name="motivo" maxlength="1000" placeholder="Informe o motivo ou observação opcional."></textarea></div>`,
-      (d) => {
-        try {
-          activeUser();
-          if (typeof D.optOutContact === "function") {
-            D.optOutContact(state, user, id, { motivo: d.motivo });
-          } else {
-            if (typeof D.registerOptOut === "function") {
-              D.registerOptOut(state, user, id, { motivo: d.motivo });
-              c.optOut = true;
-            } else {
-              c.optOut = true;
-            }
-            // Cancel pending
-            if (Array.isArray(state.mailings)) {
-              for (const m of state.mailings) {
-                if (Array.isArray(m.contacts)) m.contacts = m.contacts.filter((x) => x !== id);
-              }
-            }
-          }
-          save();
-          closeModal();
-          render();
-          profile(id);
-          toast("Opt-out registrado com sucesso.");
-        } catch (err) {
-          toast(err.message, "error");
+      async (d) => {
+        activeUser();
+        const reason =
+          String(d.motivo ?? "").trim() ||
+          "Pedido de descadastro registrado manualmente";
+        const response = await fetch(`/api/contacts/${id}/respostas`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "Idempotency-Key": generateIdempotencyKey(),
+          },
+          body: JSON.stringify({
+            classificacao: "descadastro",
+            conteudo: reason,
+          }),
+        });
+        if (response.status === 401) {
+          logout("Sua sessão expirou. Entre novamente.");
+          return;
         }
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw Error(result.error || "Não foi possível registrar o opt-out.");
+        }
+
+        selectedContacts.delete(id);
+        lastContactsRequestKey = "";
+        closeModal();
+        if (page === "contacts") await fetchServerContacts(true);
+        await profile(id);
+        toast("Opt-out registrado com sucesso.");
       },
       "Confirmar opt-out",
     );
@@ -2961,14 +3145,26 @@ export function createCRMController(model) {
       "Vamos recuperar seu acesso",
       `<p class="muted" style="margin-bottom:20px">Informe o e-mail cadastrado para receber as instruções.</p>${field("E-mail de recuperação", "email", "", "email", "required")}`,
       async (d) => {
+        let response;
         try {
-          await fetch("/api/auth/recuperar-senha", {
+          response = await fetch("/api/auth/recuperar-senha", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email: d.email }),
           });
         } catch {
-          // Resposta neutra opaca preservada mesmo se houver falha de rede
+          // Resposta neutra opaca preservada em caso de falha transitória de rede
+        }
+        if (response && response.status === 429) {
+          const result = await response.json().catch(() => ({}));
+          throw Error(
+            result.error ||
+              "Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.",
+          );
+        }
+        if (response && response.status === 400) {
+          const result = await response.json().catch(() => ({}));
+          throw Error(result.error || "Informe um e-mail válido.");
         }
         modal(
           "Confira sua caixa de entrada",
@@ -3055,18 +3251,33 @@ export function createCRMController(model) {
           ...contactFilterQueryParams(),
         });
         if (isSelected) params.set("ids", selectedIds.join(","));
-        const response = await fetch(`/api/contacts?${params.toString()}`);
-        if (response.ok) {
-          const data = await response.text();
-          if (data.trim()) {
-            download(filename, data);
-            toast(successMessage);
-            return;
-          }
+        const response = await fetch(`/api/contacts?${params.toString()}`, {
+          cache: "no-store",
+        });
+        if (response.status === 401) {
+          logout("Sua sessão expirou. Entre novamente.");
+          return;
         }
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          toast(
+            errData.error || "Não foi possível exportar os contatos do servidor.",
+            "error",
+          );
+          return;
+        }
+        const data = await response.text();
+        const lines = data.trim().split(/\r?\n/).filter(Boolean);
+        if (lines.length <= 1) {
+          toast("Nenhum contato encontrado para exportação.", "error");
+          return;
+        }
+        download(filename, data);
+        toast(successMessage);
+        return;
       } catch {
-        // A API pode estar indisponível; mantém a exportação local como
-        // alternativa sem impedir o uso da tela.
+        toast("Não foi possível exportar os contatos do servidor.", "error");
+        return;
       }
     }
 
@@ -3194,8 +3405,6 @@ export function createCRMController(model) {
           $(".sidebar").classList.toggle("open");
           break;
         case "logout":
-          D.audit(state, user, "Saída do sistema", null);
-          save();
           logout();
           break;
         case "close":
@@ -3540,17 +3749,8 @@ export function createCRMController(model) {
           break;
         case "delete-contact": {
           admin();
-          const c = state.contacts.find((c) => c.id === id);
+          const c = findContactById(id);
           if (!c) throw Error("Contato não encontrado.");
-          const check = canDeleteContact(state, id);
-          if (!check.allowed) {
-            modal(
-              "Uma história que precisa ser preservada",
-              `<p>${esc(check.reason)}</p>`,
-              button("Voltar à ficha", "profile", id),
-            );
-            break;
-          }
           modal(
             "Excluir este relacionamento?",
             `<p>O cadastro de <b>${esc(c.name)}</b> será removido. Esta ação requer confirmação.</p>`,
@@ -3561,11 +3761,45 @@ export function createCRMController(model) {
         }
         case "confirm-delete": {
           admin();
-          deleteContact(state, user, id);
-          save();
-          closeModal();
-          render();
-          toast("Cadastro excluído.");
+          fetch(`/api/contacts/${id}`, {
+            method: "DELETE",
+            headers: {
+              "Idempotency-Key": generateIdempotencyKey(),
+            },
+          })
+            .then(async (res) => {
+              if (res.status === 401) {
+                logout("Sua sessão expirou. Entre novamente.");
+                return;
+              }
+              const result = await res.json().catch(() => ({}));
+              if (res.status === 409) {
+                modal(
+                  "Uma história que precisa ser preservada",
+                  `<p>${esc(result.error || "Este contato não pode ser excluído.")}</p>`,
+                  button("Voltar à ficha", "profile", id),
+                );
+                return;
+              }
+              if (!res.ok) {
+                toast(result.error || "Não foi possível excluir o cadastro.", "error");
+                return;
+              }
+              selectedContacts.delete(id);
+              serverContactCache.delete(id);
+              if (activeProfileContact?.id === id) activeProfileContact = null;
+              lastContactsRequestKey = "";
+              closeModal();
+              if (page === "contacts") {
+                await fetchServerContacts(true);
+              } else {
+                render();
+              }
+              toast("Cadastro excluído.");
+            })
+            .catch(() => {
+              toast("Não foi possível contatar o servidor para excluir o cadastro.", "error");
+            });
           break;
         }
       }
@@ -3710,6 +3944,7 @@ export function createCRMController(model) {
         page = user.role === "Administrador" ? "dashboard" : "funnel";
         lastActivity = Date.now();
         lastSessionTouch = 0;
+        fetchServerUsers();
       } else if (response.status !== 401) {
         const result = await response.json().catch(() => ({}));
         throw Error(result.error || "Não foi possível validar a sessão.");

@@ -143,7 +143,7 @@ src/lib/view-state.js    estado de apresentação e interface com APIs nativas
 src/lib/domain.cjs       regras de domínio originais, Ficha 360° e interações
 public/favicon.png       logo e favicon originais
 tests/                   domínio, estado, integração PostgreSQL, fluxos no Chrome e comparação visual
-docs/                    documentação técnica e guia de auditoria/code review
+docs/                    documentação técnica, guia de auditoria/code review e caderno de homologação QA
 source-manifest.json     hashes SHA-256 dos arquivos de origem
 ```
 

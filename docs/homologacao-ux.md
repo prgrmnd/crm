@@ -104,7 +104,7 @@ Antes de executar cada ciclo de UX, prepare o ambiente conforme o [README técni
   3. Pedir que selecionem a origem **Site** ou **Instagram** na Etapa 2 e observar se a trava automática para **Inbound** está visualmente evidente e explicada.
   4. Avaliar a clareza do feedback quando há tentativa de duplicidade de e-mail ou CPF/CNPJ.
 * **Resultado Esperado:** Fluxo em 2 etapas concluído sem intervenção do moderador; campos obrigatórios, bloqueio *Inbound* e mensagens de validação são compreendidos na primeira leitura.
-* **Nota técnica (versão atual `develop`):** O cadastro na UI ainda opera sobre o estado local (`luz-crm-v1`); revalidar feedbacks de erro vindos do servidor quando a tela for conectada ao backend de `contatos`.
+* **Nota técnica (versão atual `develop`):** O cadastro e a edição em 2 etapas persistem diretamente no PostgreSQL via `POST /api/contacts` e `PATCH /api/contacts/[id]`, validando duplicidade (`HTTP 409`) e regra Inbound no servidor.
 * **Resultado da Validação:**
   - [ ] **PASSOU** *(Relatório consolidado em `docs/ux/`)*
   - [ ] **FALHOU**
@@ -120,7 +120,7 @@ Antes de executar cada ciclo de UX, prepare o ambiente conforme o [README técni
   3. Solicitar o registro manual de **Pedido de Descadastro (Opt-out)** e verificar se o indicador de inelegibilidade para e-mails fica imediatamente visível na ficha.
   4. (Com perfil Administrador) Avaliar a clareza da orientação exibida quando a exclusão é bloqueada por vínculo financeiro (orientando cancelar o plano em vez de excluir).
 * **Resultado Esperado:** Usuário encontra a ficha, registra interação e entende o estado de opt-out sem hesitação; mensagens de imutabilidade e bloqueio de exclusão financeira são autoexplicativas.
-* **Nota técnica (versão atual `develop`):** A persistência de interações e opt-out na interface ainda usa o estado do protótipo (`luz-crm-v1`), enquanto o bloqueio de exclusão financeira já possui trava no backend (`DELETE /api/contacts/[id]`).
+* **Nota técnica (versão atual `develop`):** A Ficha 360° (`GET /api/contacts/[id]`), as interações (`POST /api/contacts/[id]/interacoes`), respostas/opt-out (`POST /api/contacts/[id]/respostas`) e exclusão lógica (`DELETE /api/contacts/[id]`) operam diretamente no PostgreSQL (a checagem real de vínculo financeiro entra com `PB-060`/`PB-061`).
 * **Resultado da Validação:**
   - [ ] **PASSOU** *(Relatório consolidado em `docs/ux/`)*
   - [ ] **FALHOU**
@@ -137,7 +137,7 @@ Antes de executar cada ciclo de UX, prepare o ambiente conforme o [README técni
   2. Validar **estados vazios (*empty states*)**: listagem sem contatos, busca/filtro sem resultados e ficha sem interações registradas.
   3. Testar nomes extensos, e-mails longos e resumos próximos a 3.000 caracteres verificando quebras de linha, rolagem horizontal indesejada e sobreposição de botões.
 * **Resultado Esperado:** Nenhuma quebra de layout, texto cortado ou ação inacessível em mobile/tablet; todos os estados vazios apresentam orientação clara para o próximo passo do operador.
-* **Nota técnica (versão atual `develop`):** Quando a tabela `contatos` está vazia ou na aba **Doadores**, a API usa fallback de demonstração; para testar *empty state* na listagem, aplique um termo de busca/filtro sem correspondência.
+* **Nota técnica (versão atual `develop`):** Quando `DATABASE_URL` está configurada, a listagem de contatos exibe o *empty state* real quando a tabela `contatos` está vazia (apenas a aba **Doadores** mantém fallback de demonstração até `PB-060`/`PB-061`).
 * **Resultado da Validação:**
   - [ ] **PASSOU**
   - [ ] **FALHOU**

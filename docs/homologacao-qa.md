@@ -161,7 +161,7 @@ Antes de iniciar a homologação funcional, certifique-se de que o ambiente loca
   2. Selecione 2 contatos na **Página 1**, avance para a **Página 2**, selecione mais 1 contato e volte para a **Página 1**.
   3. Clique em **Exportar CSV** e abra o arquivo gerado (teste com seleção ativa e sem seleção).
 * **Resultado Esperado:** A seleção feita na Página 1 permanece preservada ao navegar entre páginas; o arquivo CSV usa UTF-8 com BOM e separador `;`, exportando somente os selecionados quando há seleção ou o resultado filtrado completo quando não há seleção.
-* **Nota técnica (versão atual `develop`):** Quando a tabela `contatos` no PostgreSQL está vazia — ou na aba **Doadores** (planos e pagamentos ainda não modelados no banco) — a API utiliza **fallback da massa de demonstração**. Para validar leitura/exportação de dados reais persistidos, popule registros em `contatos` antes do teste.
+* **Nota técnica (versão atual `develop`):** A listagem e exportação CSV de **Todos** e **Potenciais** consultam diretamente o PostgreSQL (exibindo *empty state* real quando a tabela `contatos` está vazia). Apenas a aba **Doadores** mantém fallback de demonstração até a entrega de planos/pagamentos (`PB-060`/`PB-061`).
 * **Resultado do Teste:**
   - [ ] **PASSOU**
   - [ ] **FALHOU**
@@ -176,7 +176,7 @@ Antes de iniciar a homologação funcional, certifique-se de que o ambiente loca
   2. Preencha e-mail ou telefone, avance para a Etapa 2 e selecione Origem **Site** ou **Instagram**.
   3. Conclua o cadastro. Em seguida, tente cadastrar um **novo contato usando o mesmo e-mail ou mesmo CPF/CNPJ**.
 * **Resultado Esperado:** O sistema exige ao menos e-mail ou telefone; para *Site* e *Instagram*, a classificação é travada como **Inbound**; a tentativa de cadastrar e-mail ou documento duplicado é bloqueada.
-* **Nota técnica (versão atual `develop`):** A rota `src/app/api/contacts/route.ts` implementa apenas `GET`; o fluxo de cadastro na interface ainda persiste no armazenamento local (`luz-crm-v1`). As constraints/triggers correspondentes no PostgreSQL (`contatos`) já existem e são validadas pela suíte `tests/contatos.integration.test.cjs` (`npm test`), aguardando integração da tela de cadastro ao backend.
+* **Nota técnica (versão atual `develop`):** O cadastro e a edição em duas etapas persistem diretamente na tabela `contatos` via `POST /api/contacts` e `PATCH /api/contacts/[id]`, com controle otimista (`versao`), regra Inbound, bloqueio de duplicidade (`HTTP 409`) e auditoria em `eventos_auditoria`.
 * **Resultado do Teste:**
   - [ ] **PASSOU**
   - [ ] **FALHOU**
@@ -191,6 +191,7 @@ Antes de iniciar a homologação funcional, certifique-se de que o ambiente loca
   2. Logado como **Administrador**, exclua um contato **sem histórico financeiro**.
   3. Logado como **Administrador**, tente excluir um contato que possua **vínculo/histórico financeiro** (na interface e via requisição direta a `DELETE /api/contacts/[id]`).
 * **Resultado Esperado:** Operador não possui permissão de exclusão; Administrador consegue excluir contato sem histórico financeiro (com registro em `eventos_auditoria`), mas a interface e o servidor (`HTTP 409`) recusam a exclusão quando há histórico financeiro.
+* **Nota técnica (versão atual `develop`):** A Ficha 360° (`GET /api/contacts/[id]`) e a exclusão lógica (`DELETE /api/contacts/[id]`) operam diretamente no PostgreSQL com trava `403` para Operador, idempotência e auditoria. A checagem de vínculo financeiro (`hasFinancialHistoryInDatabase`) está estruturada para receber a consulta às tabelas de planos/pagamentos na entrega de `PB-060`/`PB-061`.
 * **Resultado do Teste:**
   - [ ] **PASSOU**
   - [ ] **FALHOU**
@@ -205,7 +206,7 @@ Antes de iniciar a homologação funcional, certifique-se de que o ambiente loca
   2. Tente informar uma **data/hora futura** (ex.: amanhã) ou deixar o **resumo em branco** (ou acima de 3.000 caracteres).
   3. Salve uma interação válida e procure opções para **editar ou apagar** essa anotação na tela.
 * **Resultado Esperado:** O sistema bloqueia data futura, resumo vazio e texto acima do limite; após salva, a interação aparece na linha do tempo com autor e data/hora, **sem opção de edição ou exclusão**.
-* **Nota técnica (versão atual `develop`):** A gravação na tela opera sobre o estado local da aplicação; a imutabilidade física no PostgreSQL (tabela `interacoes`) é validada na suíte `tests/historico-opt-out.integration.test.cjs`.
+* **Nota técnica (versão atual `develop`):** O formulário rápido persiste diretamente na tabela `interacoes` via `POST /api/contacts/[id]/interacoes` (com idempotência e auditoria), protegido por triggers de imutabilidade física no PostgreSQL.
 * **Resultado do Teste:**
   - [ ] **PASSOU**
   - [ ] **FALHOU**
@@ -219,7 +220,7 @@ Antes de iniciar a homologação funcional, certifique-se de que o ambiente loca
   1. Na Ficha 360° de um contato, registre manualmente uma resposta classificando-a como **Pedido de Descadastro (Opt-out)**.
   2. Verifique a linha do tempo e o status de elegibilidade de comunicação do contato.
 * **Resultado Esperado:** O descadastro fica registrado na linha do tempo com autor/data e marca o contato como inelegível/bloqueado para futuros envios de e-mail.
-* **Nota técnica (versão atual `develop`):** Conforme registrado no [README](../README.md#histórico-e-opt-out-pb-058), o frontend ainda utiliza o estado do protótipo (`optOut` / `luz-crm-v1`), enquanto as tabelas e triggers temporais no PostgreSQL (`respostas_contato`, `preferencias_comunicacao` e auditoria `comunicacao.descadastro`) já estão implementadas e cobertas por `tests/historico-opt-out.integration.test.cjs`.
+* **Nota técnica (versão atual `develop`):** Os fluxos de resposta e opt-out na Ficha 360° persistem diretamente em `respostas_contato` via `POST /api/contacts/[id]/respostas`, acionando a trigger transacional `respostas_registrar_descadastro` que atualiza `preferencias_comunicacao` (`descadastrado`) e registra `comunicacao.descadastro` em `eventos_auditoria`.
 * **Resultado do Teste:**
   - [ ] **PASSOU**
   - [ ] **FALHOU**

@@ -108,25 +108,19 @@ Os modelos `Interacao`, `RespostaContato` e `PreferenciaComunicacao` representam
 - Para registrar descadastro, inserir uma `RespostaContato` com `classificacao = 'descadastro'`. O trigger serializa os pedidos do contato, encerra a preferência anterior, cria a versão descadastrada vinculada à resposta e registra `comunicacao.descadastro` em `eventos_auditoria`, tudo na transação da inserção. Falha em qualquer etapa desfaz todos esses efeitos. Não duplicar esses efeitos na aplicação. Uma nova resposta de descadastro é um novo registro histórico; repetir a mesma requisição ainda exige idempotência no consumidor.
 - `envio_destinatario_id` é UUID opcional sem FK até a tabela `envio_destinatarios` existir. Não há tela ou fluxo de reopt-in nesta entrega.
 
-Os consumidores de envios e réguas devem consultar a preferência vigente no instante do envio e exigir `situacao = 'permitido'`, usando `vigente_desde <= instante AND (vigente_ate IS NULL OR instante < vigente_ate)`. A estrutura não envia mensagens nem cancela agendamentos por si só. O frontend ainda usa o estado do protótipo (`optOut`); a ligação das telas e dos serviços de envio a essas tabelas permanece nas tarefas operacionais correspondentes.
+Os consumidores de envios e réguas devem consultar a preferência vigente no instante do envio e exigir `situacao = 'permitido'`, usando `vigente_desde <= instante AND (vigente_ate IS NULL OR instante < vigente_ate)`. A estrutura não envia mensagens nem cancela agendamentos por si só. A Ficha 360° e a listagem já consultam e gravam interações (`POST /api/contacts/[id]/interacoes`) e respostas/opt-out (`POST /api/contacts/[id]/respostas`) diretamente nessas tabelas no PostgreSQL.
 
 As FKs pendentes de `eventos_auditoria` para usuários e contatos permanecem uma pendência da auditoria; não foram adicionadas nesta issue para evitar alterar seus contratos e fixtures fora do escopo.
 
 
-### Ficha 360° e formulário rápido de interações (PB-009 / PB-010)
+### Contatos, Ficha 360°, Interações e Opt-out no PostgreSQL (PB-007 a PB-011)
 
-A Ficha 360° do contato e a linha do tempo (`src/lib/domain.cjs` e `src/lib/crm-controller.js`) implementam as travas operacionais de proteção do histórico e de registro de interações:
+O módulo de Contatos está integrado diretamente ao PostgreSQL via rotas autenticadas no App Router:
 
-- **Trava de exclusão por histórico financeiro (PB-009)**: a exclusão de contatos exige perfil `Administrador` (`deleteContact`) e verificação prévia via `canDeleteContact`. Se o contato possuir qualquer pagamento ou contribuição registrada no histórico financeiro, a exclusão é bloqueada no domínio e na interface (orientando a alteração do status do plano para `Cancelado` para encerrar recorrências).
-- **Formulário rápido de interações na timeline (PB-010)**: `registerInteraction` registra interações diretamente na ficha do contato exigindo usuário autenticado, seleção obrigatória de canal (`telefone`, `whatsapp`, `reuniao` ou `email`), data/hora válida com bloqueio estrito de datas futuras (`interactionDate <= now`) e resumo obrigatório da conversa (não vazio, limite de 3.000 caracteres). Os registros são inseridos como eventos imutáveis na timeline do contato e na trilha de auditoria (`Contato por <Canal>`).
-
-### Listagem de contatos (PB-007 / Issue #14)
-
-A tela de contatos consulta `GET /api/contacts` com sessão autenticada. A listagem é paginada no servidor (`page` e `pageSize`) e aceita os filtros `tab` (`all`, `leads`, `donors`), `q`, `origin`, `owner`, `period`, `funnel`, `status`, `stage` e `ids`. A troca de filtros reinicia a página, e a navegação entre páginas preserva os parâmetros ativos.
-
-- **Seleção em lote**: os identificadores ficam em um `Set` independente da página, permitindo selecionar, desmarcar e limpar contatos mesmo após navegar entre páginas.
-- **Exportação CSV**: `GET /api/contacts?export=csv` gera o arquivo com todos os resultados do filtro. Quando há seleção, o frontend envia `ids` e exporta somente os contatos marcados; sem seleção, exporta o resultado filtrado. O arquivo usa UTF-8 com BOM, separador `;`, cabeçalhos e escape de aspas/caracteres especiais.
-- **Fallback de demonstração**: quando o PostgreSQL ainda não possui contatos cadastrados, a API usa a massa de demonstração para manter a tela navegável. Como o schema atual não modela planos de doação nem pagamentos, os doadores continuam vindo dessa massa de demonstração; a integração de planos ao banco permanece uma limitação registrada para uma issue futura.
+- **Listagem, filtros, seleção e CSV (`GET /api/contacts` e `GET /api/users`)**: paginação no servidor (`page`, `pageSize`), filtros (`tab`, `q`, `origin`, `owner`, `period`, `funnel`, `status`, `stage`, `ids`), operadores ativos vindos de `usuarios`, exportação CSV em UTF-8 com BOM e separador `;` com nomes oficiais das etapas (`etapas_captacao`). Com `DATABASE_URL` configurada, retorna *empty state* real quando `contatos` está vazia; apenas a aba **Doadores** mantém fallback de demonstração até a modelagem de planos/pagamentos (`PB-060`/`PB-061`).
+- **Cadastro e edição em duas etapas (`POST /api/contacts` e `PATCH /api/contacts/[id]`)**: persistência transacional com `withIdempotency`, regra Inbound (`Site`/`Instagram`), bloqueio de duplicidade (`HTTP 409`, inclusive contra excluídos logicamente), controle otimista de concorrência (`versao`), preservação obrigatória da etapa na edição cadastral e trilha em `eventos_auditoria`.
+- **Ficha 360° e exclusão lógica (`GET /api/contacts/[id]` e `DELETE /api/contacts/[id]`)**: consolida contato, preferência vigente de comunicação, interações, respostas e auditoria; a exclusão exige perfil `Administrador` (`HTTP 403`), usa `withIdempotency`, aplica exclusão lógica (`excluido_em`) com auditoria e expõe `hasFinancialHistoryInDatabase` (`HTTP 409`) para integração com planos/pagamentos.
+- **Interações imutáveis (`GET/POST /api/contacts/[id]/interacoes`) e Respostas/Opt-out (`GET/POST /api/contacts/[id]/respostas`)**: rotas append-only autenticadas e idempotentes; o registro de `descadastro` aciona atomicamente a trigger `respostas_registrar_descadastro` (`PB-058`).
 
 Produção:
 
@@ -135,7 +129,7 @@ npm.cmd run build
 npm.cmd start
 ```
 
-Contas devem estar cadastradas em `usuarios` com senha Argon2id antes do primeiro acesso. A autenticação e as sessões são validadas no servidor; os demais dados operacionais da interface continuam no armazenamento local `luz-crm-v1`. Fluxos de e-mail permanecem simulados.
+Contas devem estar cadastradas em `usuarios` com senha Argon2id antes do primeiro acesso. Autenticação, sessões, recuperação de senha, operadores e o módulo de Contatos (listagem, cadastro, edição, Ficha 360°, exclusão lógica, interações e opt-out) operam diretamente no PostgreSQL; módulos das Sprints 2 a 6 permanecem no armazenamento local `luz-crm-v1` até suas respectivas entregas. Fluxos de e-mail permanecem simulados.
 
 ## Estrutura
 

@@ -180,3 +180,66 @@ test("429 após o limite de tentativas pelo mesmo e-mail normalizado", async (t)
   );
   assert.equal(bloqueada.status, 429);
 });
+
+test("grava evento sanitizado em eventos_auditoria ao emitir token de recuperação", async (t) => {
+  if (!bancoDisponivel) {
+    t.skip("PostgreSQL indisponível para teste de integração.");
+    return;
+  }
+  const { usuario, email } = await criarUsuario();
+  const res = await POST(criarRequest("10.0.2.1", { email }));
+  assert.equal(res.status, 200);
+
+  const audits = await prisma.eventoAuditoria.findMany({
+    where: {
+      entidadeId: usuario.id,
+      acao: "Recuperação de senha solicitada",
+    },
+  });
+  assert.equal(audits.length, 1);
+  assert.equal(audits[0].atorTipo, "sistema");
+  assert.deepEqual(audits[0].depois, { resultado: "token_emitido" });
+});
+
+test("tela de login renderiza o botão Esqueci minha senha (data-action=recover)", async () => {
+  const { createViewState } = await import("../src/lib/view-state.js");
+  const { createCRMController } = await import("../src/lib/crm-controller.js");
+
+  const origFetch = globalThis.fetch;
+  const origStorage = globalThis.localStorage;
+  const origWindow = globalThis.window;
+  globalThis.localStorage = {
+    getItem: () => null,
+    setItem: () => {},
+    removeItem: () => {},
+    clear: () => {},
+  } as any;
+  globalThis.window = {
+    location: { hash: "" },
+    addEventListener() {},
+    removeEventListener() {},
+    scrollTo() {},
+  } as any;
+  globalThis.fetch = (async () => ({
+    ok: false,
+    status: 401,
+    json: async () => ({ error: "Não autenticado" }),
+  })) as any;
+
+  const model = createViewState(() => {});
+  try {
+    createCRMController(model);
+    await new Promise((r) => setTimeout(r, 40));
+    const recoverBtn = model.view.find('[data-action="recover"]');
+    assert.ok(
+      recoverBtn,
+      'Botão "Esqueci minha senha" deve estar visível na tela de login',
+    );
+    assert.match(recoverBtn.textContent, /Esqueci minha senha/i);
+  } finally {
+    model.dispose();
+    globalThis.fetch = origFetch;
+    globalThis.localStorage = origStorage;
+    globalThis.window = origWindow;
+  }
+});

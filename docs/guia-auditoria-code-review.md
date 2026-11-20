@@ -47,6 +47,10 @@ Cada Pull Request deve conter **exclusivamente** os arquivos criados ou modifica
 
 - **Responsabilidade do Autor:** Antes de solicitar revisão (Code Review) ou marcar o PR como *Ready for Review*, o autor **deve obrigatoriamente** atualizar sua branch com o estado mais recente de `origin/develop` (`git fetch origin && git rebase origin/develop` ou `git merge origin/develop`).
 - **Vedação de transferência de conflitos:** PRs com conflitos de merge abertos no GitHub ou defasados em relação às migrations e contratos da `develop` serão rejeitados imediatamente (*Changes Requested*), não cabendo à liderança técnica resolver conflitos de código elementares do autor.
+- **Controle de WIP e Fluxo de Triagem (Risco `R-04` do Planning):**
+  - **WIP máximo:** cada desenvolvedor pode manter no máximo **2 Pull Requests abertos simultaneamente** para evitar gargalo de revisão no Tech Lead (`LT-01`).
+  - **Triagem prévia funcional:** PRs com entregas funcionais passam por triagem prévia de `QA-01` antes do fechamento técnico.
+  - **Revisão cruzada de contingência:** em rotas puramente visuais/UI, desenvolvedores veteranos podem realizar revisão cruzada para desbloquear a fila de Code Review.
 
 ---
 
@@ -67,7 +71,7 @@ $env:DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5432/luz_crm?schema=
 # 2. Validação de integridade sintática e relacional do schema Prisma
 npx prisma validate
 
-# 3. Geração do Prisma Client atualizado em node_modules/.prisma
+# 3. Geração do Prisma Client atualizado em src/generated/prisma
 npm run db:generate
 
 # 4. Validação estática de tipos TypeScript (exigido: 0 erros)
@@ -102,7 +106,7 @@ O projeto possui testes com diferentes requisitos de infraestrutura que devem se
 
 | Categoria de Teste | Dependência de Banco (Docker) | Como Executar | Escopo de Validação |
 | :--- | :---: | :--- | :--- |
-| **Testes de Unidade / Route Handlers / UI Isolada** | Não (ou via mocks controlados) | `node --test tests/<arquivo>.test.cjs` | Contratos de rota HTTP, validações de payload, regras de domínio isoladas, sanitização e respostas opacas. |
+| **Testes de Unidade / Route Handlers / UI Isolada** | Não (ou via mocks controlados) | `node --test tests/<arquivo>.test.cjs` ou `node --test --import ./tests/test-setup.mjs tests/<arquivo>.test.ts` | Contratos de rota HTTP, validações de payload, regras de domínio isoladas, sanitização e respostas opacas. |
 | **Testes de Integração de Banco de Dados** | **Sim (PostgreSQL ativo)** | `npm test` (usa `scripts/test-with-postgres.cjs`) | Migrations, constraints, triggers PL/pgSQL (`55000`), índices parciais e transações reais no PostgreSQL (ex.: `tests/tokens-recuperacao.integration.test.cjs`). |
 
 > **Atenção:** Certifique-se de que o serviço Docker do PostgreSQL esteja em execução antes de rodar `npm test` para que a suíte de integração valide os triggers e constraints reais do banco.
@@ -115,12 +119,12 @@ Durante o Code Review, o revisor deve inspecionar o código linha a linha contra
 
 ### 3.1. Triggers e Imutabilidade no PostgreSQL
 
-O banco de dados do CRM Luz da Esperança implementa **triggers de imutabilidade e integridade de estado** (ex.: tabela `tokens_recuperacao_senha` e registros de auditoria). Tentativas de atualizar registros já finalizados (consumidos ou invalidados) disparam erro nativo do PostgreSQL com código SQLSTATE `55000` (*object_not_in_prerequisite_state*).
+O banco de dados do CRM Luz da Esperança implementa **triggers de imutabilidade e integridade de estado** (ex.: tabela `tokens_recuperacao` e registros de auditoria). Tentativas de atualizar registros já finalizados (consumidos ou invalidados) disparam erro nativo do PostgreSQL com código SQLSTATE `55000` (*object_not_in_prerequisite_state*).
 
 - **Regra 1 — Filtros Restritivos Obrigatórios em Updates:** Nunca execute `update` ou `updateMany` amplos baseados apenas em `usuarioId`. Sempre restrinja a cláusula `where` apenas aos registros ativos:
   ```typescript
   // CORRETO: Atualiza apenas tokens ativos, evitando acionar a trigger de imutabilidade (erro 55000)
-  await tx.tokenRecuperacaoSenha.updateMany({
+  await tx.tokenRecuperacao.updateMany({
     where: {
       usuarioId: usuario.id,
       consumidoEm: null,

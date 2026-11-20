@@ -63,13 +63,21 @@ Os modelos `Usuario` (`usuarios`), `Sessao` (`sessoes`) e `TentativaLogin` (`ten
 - `GET /api/auth/session` valida a sessão e `PUT /api/auth/session` registra atividade; após 30 minutos sem atividade, a sessão é revogada. `POST /api/auth/logout` revoga a sessão.
 - O perfil retornado pelo servidor direciona administradores à visão geral e operadores ao funil de captação. Configure `DATABASE_URL` e aplique as migrations para habilitar o fluxo.
 
-### Tokens de recuperação de senha (PB-053)
+### Tokens de recuperação de senha (PB-053) e solicitação segura (PB-002)
 
 O modelo `TokenRecuperacao` (`tokens_recuperacao`) gerencia tokens de uso único para redefinição de senha vinculados a `usuarios(id)` (`ON DELETE RESTRICT`):
 
 - **Hash SHA-256 e TTL estrito de 15 minutos**: `token_hash` é único e validado por `CHECK` (`^[0-9a-f]{64}$`). A expiração (`expira_em`) tem padrão `CURRENT_TIMESTAMP + INTERVAL '15 minutes'` e `CHECK` constraint estrita garantindo `expira_em > criado_em AND expira_em <= criado_em + INTERVAL '15 minutes'`.
 - **Unicidade de token ativo por usuário**: o índice único parcial `tokens_recuperacao_um_ativo_por_usuario ON tokens_recuperacao (usuario_id) WHERE consumido_em IS NULL AND invalidado_em IS NULL` permite apenas um token pendente por usuário (exigindo a invalidação de tokens anteriores na emissão de um novo).
 - **Estados finais imutáveis**: `CHECK` constraints garantem consumo dentro do prazo (`consumido_em <= expira_em`) e exclusão mútua entre consumo e invalidação. O trigger `tokens_recuperacao_proteger` impede qualquer alteração após `consumido_em` ou `invalidado_em` serem preenchidos e bloqueia mutações nos atributos de identificação e validade do token.
+- **Rota `POST /api/auth/recuperar-senha` (PB-002)**: valida o formato do e-mail antes de consumir cota de rate limit por IP e e-mail normalizado (`HTTP 429` em excesso de tentativas), invalida atomicamente tokens pendentes anteriores de contas ativas e persiste apenas o hash SHA-256. Retorna sempre `HTTP 200` com resposta neutra idêntica para prevenir enumeração de contas; em `NODE_ENV=development`, simula o envio no console com o prefixo `[DEV E-MAIL]`.
+
+### Middleware de requisições idempotentes (PB-071)
+
+O modelo `RequisicaoIdempotente` (`requisicoes_idempotentes`) e o wrapper `withIdempotency` (`src/lib/idempotency-service.ts`) garantem deduplicação transacional de comandos mutáveis da API:
+
+- **Chave UUID e integridade de payload**: exige o cabeçalho `Idempotency-Key` no formato UUID válido, persiste `hash_requisicao` (SHA-256 hexadecimal do payload) com unicidade por `(usuario_id, operacao, chave)` e retenção de 24 horas (`expira_em`).
+- **Controle de conflito e replay seguro**: reutilizar a mesma chave com payload diferente ou enquanto a operação original estiver em estado `'processando'` retorna `HTTP 409` (com `Retry-After: 1` quando em processamento); repetições idênticas de requisições concluídas devolvem a resposta consolidada sem reexecutar efeitos colaterais.
 
 ### Domínios estáticos dos funis e carga idempotente (PB-055)
 
@@ -112,7 +120,7 @@ A Ficha 360° do contato e a linha do tempo (`src/lib/domain.cjs` e `src/lib/crm
 - **Trava de exclusão por histórico financeiro (PB-009)**: a exclusão de contatos exige perfil `Administrador` (`deleteContact`) e verificação prévia via `canDeleteContact`. Se o contato possuir qualquer pagamento ou contribuição registrada no histórico financeiro, a exclusão é bloqueada no domínio e na interface (orientando a alteração do status do plano para `Cancelado` para encerrar recorrências).
 - **Formulário rápido de interações na timeline (PB-010)**: `registerInteraction` registra interações diretamente na ficha do contato exigindo usuário autenticado, seleção obrigatória de canal (`telefone`, `whatsapp`, `reuniao` ou `email`), data/hora válida com bloqueio estrito de datas futuras (`interactionDate <= now`) e resumo obrigatório da conversa (não vazio, limite de 3.000 caracteres). Os registros são inseridos como eventos imutáveis na timeline do contato e na trilha de auditoria (`Contato por <Canal>`).
 
-### Listagem de contatos (Issue #14)
+### Listagem de contatos (PB-007 / Issue #14)
 
 A tela de contatos consulta `GET /api/contacts` com sessão autenticada. A listagem é paginada no servidor (`page` e `pageSize`) e aceita os filtros `tab` (`all`, `leads`, `donors`), `q`, `origin`, `owner`, `period`, `funnel`, `status`, `stage` e `ids`. A troca de filtros reinicia a página, e a navegação entre páginas preserva os parâmetros ativos.
 
@@ -137,13 +145,13 @@ prisma/migrations/       migrations SQL versionadas (constraints, triggers e see
 src/generated/prisma/    cliente TypeScript gerado pelo Prisma
 src/app/                 entrada App Router, documento e CSS global original
 src/components/          componentes funcionais CRMApp e ViewNode
-src/hooks/useCRM.js      estado React, inicialização e ciclo de vida dos efeitos
+src/hooks/useCRM.ts      estado React, inicialização e ciclo de vida dos efeitos
 src/lib/crm-controller.js fluxos, modelos de apresentação e eventos migrados
 src/lib/view-state.js    estado de apresentação e interface com APIs nativas
 src/lib/domain.cjs       regras de domínio originais, Ficha 360° e interações
 public/favicon.png       logo e favicon originais
 tests/                   domínio, estado, integração PostgreSQL, fluxos no Chrome e comparação visual
-docs/                    documentação técnica e guia de auditoria/code review
+docs/                    documentação técnica, guia de code review e cadernos de homologação QA/UX
 source-manifest.json     hashes SHA-256 dos arquivos de origem
 ```
 

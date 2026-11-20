@@ -76,6 +76,13 @@ export interface Payment {
   receipt: string;
 }
 
+export interface ContactOptOutDetails {
+  at: string;
+  actorId?: string | null;
+  actorName?: string;
+  reason?: string;
+}
+
 export interface Contact {
   id: string;
   name: string;
@@ -87,8 +94,11 @@ export interface Contact {
   funnel: FunnelDirection;
   stage: number;
   owner: string;
+  ownerName?: string;
+  version?: number;
   created: string;
   optOut: boolean;
+  optOutDetails?: ContactOptOutDetails | null;
   plan?: DonationPlan;
   cadenceExit?: CadenceExit;
   history: HistoryEvent[];

@@ -71,6 +71,12 @@ O modelo `TokenRecuperacao` (`tokens_recuperacao`) gerencia tokens de uso único
 - **Unicidade de token ativo por usuário**: o índice único parcial `tokens_recuperacao_um_ativo_por_usuario ON tokens_recuperacao (usuario_id) WHERE consumido_em IS NULL AND invalidado_em IS NULL` permite apenas um token pendente por usuário (exigindo a invalidação de tokens anteriores na emissão de um novo).
 - **Estados finais imutáveis**: `CHECK` constraints garantem consumo dentro do prazo (`consumido_em <= expira_em`) e exclusão mútua entre consumo e invalidação. O trigger `tokens_recuperacao_proteger` impede qualquer alteração após `consumido_em` ou `invalidado_em` serem preenchidos e bloqueia mutações nos atributos de identificação e validade do token.
 
+### Redefinição de senha (PB-003)
+
+- A tela de nova senha é aberta pelo link `#redefinir=<token>` e valida o token com `GET /api/auth/redefinir-senha?token=...` antes de aceitar a alteração; links expirados, consumidos ou cancelados são recusados.
+- `POST /api/auth/redefinir-senha` exige token válido e senha com 8 a 1024 caracteres, incluindo letra maiúscula, minúscula, número e caractere especial. A senha é armazenada como Argon2id no formato PHC aceito pela constraint do banco.
+- Consumo do token, troca da senha, incremento de versão, revogação de todas as sessões ativas e registro de auditoria ocorrem em uma única transação, com bloqueio da linha do token para impedir uso concorrente.
+
 ### Domínios estáticos dos funis e carga idempotente (PB-055)
 
 Os modelos `Origem` (`origens`), `EtapaCaptacao` (`etapas_captacao`), `EtapaPerda` (`etapas_perda`) e `MotivoPerda` (`motivos_perda`) representam as tabelas de referência dos funis com códigos estáveis (`^[a-z][a-z0-9_]*$`):

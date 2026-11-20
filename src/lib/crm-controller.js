@@ -1650,9 +1650,51 @@ export function createCRMController(model) {
       }</section>`
     );
   }
+  function tokenRedefinicao() {
+    if (typeof window === "undefined") return null;
+    const token = new URLSearchParams(window.location.hash.slice(1)).get(
+      "redefinir",
+    );
+    return token?.trim() || null;
+  }
   function renderLogin() {
+    const token = tokenRedefinicao();
     $("#app").markup =
-      `<div class="login"><section class="login-story">${brand()}<div><div class="eyebrow" style="margin-top:50px">Relacionamentos que transformam</div><h1>A esperança floresce quando cuidamos dos nossos laços.</h1><p>Um espaço para acolher, cultivar relacionamentos e acompanhar cada gesto de generosidade.</p><div class="art">${art()}</div></div><footer>Centro Espírita e Obras Sociais · Parnaíba, PI</footer></section><section class="login-content"><div class="login-theme">${themeButton()}</div><div class="login-form"><div class="eyebrow">Bem-vindo ao nosso espaço</div><h2>Que bom ter você aqui.</h2><p>Entre para acompanhar os relacionamentos e contribuições da nossa comunidade.</p><form id="auth-form"><div class="error" role="alert"></div>${field("Seu e-mail", "email", "", "email", 'required autocomplete="username"')}${field("Sua senha", "password", "", "password", 'required autocomplete="current-password"')}<button class="btn" type="submit">Entrar no nosso espaço ${icon("arrow")}</button></form></div></section></div>`;
+      `<div class="login"><section class="login-story">${brand()}<div><div class="eyebrow" style="margin-top:50px">Relacionamentos que transformam</div><h1>A esperança floresce quando cuidamos dos nossos laços.</h1><p>Um espaço para acolher, cultivar relacionamentos e acompanhar cada gesto de generosidade.</p><div class="art">${art()}</div></div><footer>Centro Espírita e Obras Sociais · Parnaíba, PI</footer></section><section class="login-content"><div class="login-theme">${themeButton()}</div><div class="login-form"><div class="eyebrow">Bem-vindo ao nosso espaço</div><h2>${token ? "Uma nova senha" : "Que bom ter você aqui."}</h2><p>${token ? "Escolha uma senha para voltar a cuidar dos nossos laços." : "Entre para acompanhar os relacionamentos e contribuições da nossa comunidade."}</p><form id="auth-form"><div class="error" role="alert"></div>${
+        token
+          ? field(
+              "Nova senha",
+              "password",
+              "",
+              "password",
+              'required minlength="8" maxlength="1024" autocomplete="new-password"',
+            ) +
+            field(
+              "Confirme a nova senha",
+              "confirm",
+              "",
+              "password",
+              'required minlength="8" maxlength="1024" autocomplete="new-password"',
+            )
+          : field(
+              "Seu e-mail",
+              "email",
+              "",
+              "email",
+              'required autocomplete="username"',
+            ) +
+            field(
+              "Sua senha",
+              "password",
+              "",
+              "password",
+              'required autocomplete="current-password"',
+            )
+      }<button class="btn" type="submit">${token ? "Salvar nova senha" : "Entrar no nosso espaço"} ${icon("arrow")}</button></form>${
+        token
+          ? `<div style="text-align:right;margin-top:14px"><button class="text-link" data-action="cancel-reset">Voltar ao acesso</button></div>`
+          : `<div style="text-align:right;margin-top:14px"><button class="text-link" data-action="recover">Esqueci minha senha</button></div>`
+      }</div></section></div>`;
     $("#auth-form").onsubmit = async (e) => {
       e.preventDefault();
       const f = e.currentTarget,
@@ -1660,6 +1702,38 @@ export function createCRMController(model) {
       btn.disabled = true;
       try {
         const d = Object.fromEntries(runtime.formEntries(f));
+        if (token) {
+          if (d.password !== d.confirm) {
+            throw Error("As senhas precisam ser iguais.");
+          }
+          if (
+            d.password.length < 8 ||
+            d.password.length > 1024 ||
+            !/[a-z]/.test(d.password) ||
+            !/[A-Z]/.test(d.password) ||
+            !/[0-9]/.test(d.password) ||
+            !/[^A-Za-z0-9]/.test(d.password)
+          ) {
+            throw Error(
+              "A senha deve ter entre 8 e 1024 caracteres, incluindo letras maiúsculas, minúsculas, números e caracteres especiais.",
+            );
+          }
+          const response = await fetch("/api/auth/redefinir-senha", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ token, password: d.password }),
+          });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw Error(result.error || "Não foi possível redefinir a senha.");
+          }
+          await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+          if (typeof window !== "undefined") window.location.hash = "";
+          user = null;
+          render();
+          toast("Senha redefinida. Você já pode entrar.");
+          return;
+        }
         const response = await fetch("/api/auth/login", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -3163,7 +3237,8 @@ export function createCRMController(model) {
       return;
     }
     try {
-      if (!["recover", "close", "reset-link"].includes(a)) activeUser();
+      if (!["recover", "close", "reset-link", "cancel-reset"].includes(a))
+        activeUser();
       switch (a) {
         case "nav":
           navigate(id);
@@ -3487,6 +3562,12 @@ export function createCRMController(model) {
             logout();
           }, 0);
           break;
+        case "cancel-reset":
+          if (typeof window !== "undefined") {
+            window.location.hash = "";
+          }
+          renderLogin();
+          break;
         case "tasks":
           tasks();
           break;
@@ -3660,41 +3741,65 @@ export function createCRMController(model) {
       state = raw ? D.repairLegacyHistory(JSON.parse(raw)) : D.createEmptyState();
       if (state.version !== 1 || !Array.isArray(state.contacts))
         throw Error("Dados locais incompatíveis.");
-      const response = await fetch("/api/auth/session", { cache: "no-store" });
-      if (response.ok) {
-        const result = await response.json();
-        const account = result.user;
-        if (
-          !account ||
-          typeof account.id !== "string" ||
-          typeof account.name !== "string" ||
-          typeof account.email !== "string" ||
-          !["administrador", "operador_captacao"].includes(account.profile)
-        )
-          throw Error("O servidor retornou um perfil de acesso inválido.");
-        user = {
-          id: account.id,
-          name: account.name,
-          email: account.email,
-          role:
-            account.profile === "administrador"
-              ? "Administrador"
-              : "Operador de Captação",
-          active: true,
-        };
-        const savedUser = state.users.find((u) => u.id === user.id);
-        if (savedUser) Object.assign(savedUser, user);
-        else state.users.push({ ...user });
-        page = user.role === "Administrador" ? "dashboard" : "funnel";
-        lastActivity = Date.now();
-        lastSessionTouch = 0;
-      } else if (response.status !== 401) {
-        const result = await response.json().catch(() => ({}));
-        throw Error(result.error || "Não foi possível validar a sessão.");
+      const resetToken = tokenRedefinicao();
+      if (!resetToken) {
+        const response = await fetch("/api/auth/session", { cache: "no-store" });
+        if (response.ok) {
+          const result = await response.json();
+          const account = result.user;
+          if (
+            !account ||
+            typeof account.id !== "string" ||
+            typeof account.name !== "string" ||
+            typeof account.email !== "string" ||
+            !["administrador", "operador_captacao"].includes(account.profile)
+          )
+            throw Error("O servidor retornou um perfil de acesso inválido.");
+          user = {
+            id: account.id,
+            name: account.name,
+            email: account.email,
+            role:
+              account.profile === "administrador"
+                ? "Administrador"
+                : "Operador de Captação",
+            active: true,
+          };
+          const savedUser = state.users.find((u) => u.id === user.id);
+          if (savedUser) Object.assign(savedUser, user);
+          else state.users.push({ ...user });
+          page = user.role === "Administrador" ? "dashboard" : "funnel";
+          lastActivity = Date.now();
+          lastSessionTouch = 0;
+        } else if (response.status !== 401) {
+          const result = await response.json().catch(() => ({}));
+          throw Error(result.error || "Não foi possível validar a sessão.");
+        }
       }
       D.reconcile(state, { id: "system", name: "Sistema" });
       save();
       render();
+      if (resetToken) {
+        try {
+          const response = await fetch(
+            `/api/auth/redefinir-senha?token=${encodeURIComponent(resetToken)}`,
+            { cache: "no-store" },
+          );
+          const result = await response.json().catch(() => ({}));
+          if (response.status === 400) {
+            window.location.hash = "";
+            render();
+            toast(
+              result.error || "Este link de redefinição não é mais válido.",
+              "error",
+            );
+          } else if (!response.ok) {
+            toast("Não foi possível validar o link de redefinição.", "error");
+          }
+        } catch {
+          toast("Não foi possível validar o link de redefinição.", "error");
+        }
+      }
     } catch (err) {
       $("#app").markup =
         `<div class="login-content" style="min-height:100vh"><div class="login-form">${brand()}<h2 style="margin-top:35px">Vamos preparar nosso espaço.</h2><p>${esc(err.message)}</p><p>Execute <b>npm run dev</b> e abra <b>http://localhost:3000</b>.</p><small>Para remover dados locais incompatíveis, limpe o armazenamento deste site no navegador.</small></div></div>`;

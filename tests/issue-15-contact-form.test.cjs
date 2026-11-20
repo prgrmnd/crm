@@ -140,11 +140,13 @@ async function boot(state) {
     removeEventListener() {},
     scrollTo() {},
   };
-  globalThis.fetch = async (input) => {
+  globalThis.fetch = async (input, init = {}) => {
     const url = String(input);
+    const method = (init.method || "GET").toUpperCase();
     if (url.includes("/api/auth/session"))
       return {
         ok: true,
+        status: 200,
         json: async () => ({
           user: {
             id: admin.id,
@@ -154,10 +156,79 @@ async function boot(state) {
           },
         }),
       };
-    if (url.includes("/api/contacts")) {
+    if (url.includes("/api/users")) {
       const saved = JSON.parse(storage[KEY]);
       return {
         ok: true,
+        status: 200,
+        json: async () => ({ users: saved.users }),
+      };
+    }
+    if (url.includes("/api/contacts")) {
+      const saved = JSON.parse(storage[KEY]);
+      const idMatch = url.match(/\/api\/contacts\/([^/?#]+)/);
+      if (method === "POST" && !idMatch) {
+        const body = JSON.parse(init.body || "{}");
+        const created = {
+          id: D.uid(),
+          name: body.name,
+          email: String(body.email || "").trim(),
+          phone: body.phone || "",
+          document: body.document || "",
+          type: body.type || "PF",
+          origin: body.origin,
+          funnel: D.inboundOnly(body.origin) ? "Inbound" : body.funnel,
+          stage: Number(body.stage ?? 0),
+          owner: body.owner || admin.id,
+          ownerName: saved.users.find((u) => u.id === (body.owner || admin.id))?.name || admin.name,
+          version: 1,
+          created: new Date().toISOString(),
+          history: [],
+          optOut: false,
+        };
+        saved.contacts.unshift(created);
+        D.audit(saved, admin, "Contato cadastrado", created.id, `${created.origin} · ${created.funnel}`);
+        storage[KEY] = JSON.stringify(saved);
+        return { ok: true, status: 201, json: async () => ({ contact: created }) };
+      }
+      if (method === "PATCH" && idMatch) {
+        const targetId = idMatch[1];
+        const body = JSON.parse(init.body || "{}");
+        const existing = saved.contacts.find((c) => c.id === targetId);
+        if (!existing) return { ok: false, status: 404, json: async () => ({ error: "Contato não encontrado." }) };
+        if (existing.origin !== body.origin || existing.funnel !== body.funnel) {
+          D.audit(
+            saved,
+            admin,
+            "Origem e direção alteradas",
+            targetId,
+            `${existing.origin} / ${existing.funnel} → ${body.origin} / ${body.funnel}`,
+          );
+        }
+        Object.assign(existing, {
+          name: body.name ?? existing.name,
+          email: body.email !== undefined ? String(body.email).trim() : existing.email,
+          phone: body.phone ?? existing.phone,
+          document: body.document ?? existing.document,
+          type: body.type ?? existing.type,
+          origin: body.origin ?? existing.origin,
+          funnel: body.funnel ?? existing.funnel,
+          owner: body.owner ?? existing.owner,
+          version: (existing.version || 1) + 1,
+        });
+        D.audit(saved, admin, "Cadastro atualizado", targetId);
+        storage[KEY] = JSON.stringify(saved);
+        return { ok: true, status: 200, json: async () => ({ contact: existing }) };
+      }
+      if (method === "GET" && idMatch) {
+        const targetId = idMatch[1];
+        const existing = saved.contacts.find((c) => c.id === targetId);
+        if (!existing) return { ok: false, status: 404, json: async () => ({ error: "Contato não encontrado." }) };
+        return { ok: true, status: 200, json: async () => ({ contact: existing }) };
+      }
+      return {
+        ok: true,
+        status: 200,
         json: async () => ({
           contacts: saved.contacts,
           total: saved.contacts.length,

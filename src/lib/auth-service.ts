@@ -263,8 +263,32 @@ export async function revokeSession(
   prisma: PrismaClient = getPrismaClient(),
 ): Promise<void> {
   if (!token || !/^[A-Za-z0-9_-]{43}$/.test(token)) return;
-  await prisma.sessao.updateMany({
-    where: { tokenHash: sha256(token), revogadaEm: null },
-    data: { revogadaEm: new Date() },
+  const tokenHash = sha256(token);
+  await prisma.$transaction(async (transaction) => {
+    const active = await transaction.sessao.findFirst({
+      where: { tokenHash, revogadaEm: null },
+      select: { id: true, usuarioId: true, criadoEm: true },
+    });
+    if (!active) return;
+
+    const now = new Date();
+    await transaction.sessao.update({
+      where: { id: active.id },
+      data: {
+        revogadaEm: new Date(Math.max(now.getTime(), active.criadoEm.getTime())),
+      },
+    });
+    await recordAuditEvent(
+      {
+        actorType: "usuario",
+        actorId: active.usuarioId,
+        action: "Logout realizado",
+        entityType: "Autenticação",
+        entityId: active.usuarioId,
+        correlationId: randomUUID(),
+        after: { resultado: "sucesso" },
+      },
+      transaction,
+    );
   });
 }

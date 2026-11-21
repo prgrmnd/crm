@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { getPrismaClient } from "@/lib/prisma.ts";
 import { permitirTentativa } from "@/lib/rate-limit.ts";
+import { recordAuditEvent } from "@/lib/audit-service.ts";
 
 const MENSAGEM_NEUTRA = "Se o e-mail estiver cadastrado, você receberá as instruções.";
 const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -59,25 +60,37 @@ export async function POST(request: NextRequest) {
       const agora = new Date();
       const expiracao = new Date(agora.getTime() + TTL_TOKEN_MS);
 
-      // 4. Invalida apenas tokens pendentes e cria o novo, de forma atômica
-      await prisma.$transaction([
-        prisma.tokenRecuperacao.updateMany({
+      // 4. Invalida apenas tokens pendentes, cria o novo e audita de forma atômica
+      const correlationId = crypto.randomUUID();
+      await prisma.$transaction(async (tx) => {
+        await tx.tokenRecuperacao.updateMany({
           where: {
             usuarioId: usuario.id,
             consumidoEm: null,
             invalidadoEm: null,
           },
           data: { invalidadoEm: agora },
-        }),
-        prisma.tokenRecuperacao.create({
+        });
+        await tx.tokenRecuperacao.create({
           data: {
             usuarioId: usuario.id,
             tokenHash,
             criadoEm: agora,
             expiraEm: expiracao,
           },
-        }),
-      ]);
+        });
+        await recordAuditEvent(
+          {
+            actorType: "sistema",
+            action: "Recuperação de senha solicitada",
+            entityType: "Autenticação",
+            entityId: usuario.id,
+            correlationId,
+            after: { resultado: "token_emitido" },
+          },
+          tx,
+        );
+      });
 
       // Simulação do envio de e-mail em desenvolvimento
       if (process.env.NODE_ENV === "development") {

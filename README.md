@@ -63,13 +63,21 @@ Os modelos `Usuario` (`usuarios`), `Sessao` (`sessoes`) e `TentativaLogin` (`ten
 - `GET /api/auth/session` valida a sessão e `PUT /api/auth/session` registra atividade; após 30 minutos sem atividade, a sessão é revogada. `POST /api/auth/logout` revoga a sessão.
 - O perfil retornado pelo servidor direciona administradores à visão geral e operadores ao funil de captação. Configure `DATABASE_URL` e aplique as migrations para habilitar o fluxo.
 
-### Tokens de recuperação de senha (PB-053)
+### Tokens de recuperação de senha (PB-053) e solicitação segura (PB-002)
 
 O modelo `TokenRecuperacao` (`tokens_recuperacao`) gerencia tokens de uso único para redefinição de senha vinculados a `usuarios(id)` (`ON DELETE RESTRICT`):
 
 - **Hash SHA-256 e TTL estrito de 15 minutos**: `token_hash` é único e validado por `CHECK` (`^[0-9a-f]{64}$`). A expiração (`expira_em`) tem padrão `CURRENT_TIMESTAMP + INTERVAL '15 minutes'` e `CHECK` constraint estrita garantindo `expira_em > criado_em AND expira_em <= criado_em + INTERVAL '15 minutes'`.
 - **Unicidade de token ativo por usuário**: o índice único parcial `tokens_recuperacao_um_ativo_por_usuario ON tokens_recuperacao (usuario_id) WHERE consumido_em IS NULL AND invalidado_em IS NULL` permite apenas um token pendente por usuário (exigindo a invalidação de tokens anteriores na emissão de um novo).
 - **Estados finais imutáveis**: `CHECK` constraints garantem consumo dentro do prazo (`consumido_em <= expira_em`) e exclusão mútua entre consumo e invalidação. O trigger `tokens_recuperacao_proteger` impede qualquer alteração após `consumido_em` ou `invalidado_em` serem preenchidos e bloqueia mutações nos atributos de identificação e validade do token.
+- **Rota `POST /api/auth/recuperar-senha` (PB-002)**: valida o formato do e-mail antes de consumir cota de rate limit por IP e e-mail normalizado (`HTTP 429` em excesso de tentativas), invalida atomicamente tokens pendentes anteriores de contas ativas e persiste apenas o hash SHA-256. Retorna sempre `HTTP 200` com resposta neutra idêntica para prevenir enumeração de contas; em `NODE_ENV=development`, simula o envio no console com o prefixo `[DEV E-MAIL]`.
+
+### Middleware de requisições idempotentes (PB-071)
+
+O modelo `RequisicaoIdempotente` (`requisicoes_idempotentes`) e o wrapper `withIdempotency` (`src/lib/idempotency-service.ts`) garantem deduplicação transacional de comandos mutáveis da API:
+
+- **Chave UUID e integridade de payload**: exige o cabeçalho `Idempotency-Key` no formato UUID válido, persiste `hash_requisicao` (SHA-256 hexadecimal do payload) com unicidade por `(usuario_id, operacao, chave)` e retenção de 24 horas (`expira_em`).
+- **Controle de conflito e replay seguro**: reutilizar a mesma chave com payload diferente ou enquanto a operação original estiver em estado `'processando'` retorna `HTTP 409` (com `Retry-After: 1` quando em processamento); repetições idênticas de requisições concluídas devolvem a resposta consolidada sem reexecutar efeitos colaterais.
 
 ### Redefinição de senha (PB-003)
 
@@ -106,25 +114,19 @@ Os modelos `Interacao`, `RespostaContato` e `PreferenciaComunicacao` representam
 - Para registrar descadastro, inserir uma `RespostaContato` com `classificacao = 'descadastro'`. O trigger serializa os pedidos do contato, encerra a preferência anterior, cria a versão descadastrada vinculada à resposta e registra `comunicacao.descadastro` em `eventos_auditoria`, tudo na transação da inserção. Falha em qualquer etapa desfaz todos esses efeitos. Não duplicar esses efeitos na aplicação. Uma nova resposta de descadastro é um novo registro histórico; repetir a mesma requisição ainda exige idempotência no consumidor.
 - `envio_destinatario_id` é UUID opcional sem FK até a tabela `envio_destinatarios` existir. Não há tela ou fluxo de reopt-in nesta entrega.
 
-Os consumidores de envios e réguas devem consultar a preferência vigente no instante do envio e exigir `situacao = 'permitido'`, usando `vigente_desde <= instante AND (vigente_ate IS NULL OR instante < vigente_ate)`. A estrutura não envia mensagens nem cancela agendamentos por si só. O frontend ainda usa o estado do protótipo (`optOut`); a ligação das telas e dos serviços de envio a essas tabelas permanece nas tarefas operacionais correspondentes.
+Os consumidores de envios e réguas devem consultar a preferência vigente no instante do envio e exigir `situacao = 'permitido'`, usando `vigente_desde <= instante AND (vigente_ate IS NULL OR instante < vigente_ate)`. A estrutura não envia mensagens nem cancela agendamentos por si só. A Ficha 360° e a listagem já consultam e gravam interações (`POST /api/contacts/[id]/interacoes`) e respostas/opt-out (`POST /api/contacts/[id]/respostas`) diretamente nessas tabelas no PostgreSQL.
 
 As FKs pendentes de `eventos_auditoria` para usuários e contatos permanecem uma pendência da auditoria; não foram adicionadas nesta issue para evitar alterar seus contratos e fixtures fora do escopo.
 
 
-### Ficha 360° e formulário rápido de interações (PB-009 / PB-010)
+### Contatos, Ficha 360°, Interações e Opt-out no PostgreSQL (PB-007 a PB-011)
 
-A Ficha 360° do contato e a linha do tempo (`src/lib/domain.cjs` e `src/lib/crm-controller.js`) implementam as travas operacionais de proteção do histórico e de registro de interações:
+O módulo de Contatos está integrado diretamente ao PostgreSQL via rotas autenticadas no App Router:
 
-- **Trava de exclusão por histórico financeiro (PB-009)**: a exclusão de contatos exige perfil `Administrador` (`deleteContact`) e verificação prévia via `canDeleteContact`. Se o contato possuir qualquer pagamento ou contribuição registrada no histórico financeiro, a exclusão é bloqueada no domínio e na interface (orientando a alteração do status do plano para `Cancelado` para encerrar recorrências).
-- **Formulário rápido de interações na timeline (PB-010)**: `registerInteraction` registra interações diretamente na ficha do contato exigindo usuário autenticado, seleção obrigatória de canal (`telefone`, `whatsapp`, `reuniao` ou `email`), data/hora válida com bloqueio estrito de datas futuras (`interactionDate <= now`) e resumo obrigatório da conversa (não vazio, limite de 3.000 caracteres). Os registros são inseridos como eventos imutáveis na timeline do contato e na trilha de auditoria (`Contato por <Canal>`).
-
-### Listagem de contatos (Issue #14)
-
-A tela de contatos consulta `GET /api/contacts` com sessão autenticada. A listagem é paginada no servidor (`page` e `pageSize`) e aceita os filtros `tab` (`all`, `leads`, `donors`), `q`, `origin`, `owner`, `period`, `funnel`, `status`, `stage` e `ids`. A troca de filtros reinicia a página, e a navegação entre páginas preserva os parâmetros ativos.
-
-- **Seleção em lote**: os identificadores ficam em um `Set` independente da página, permitindo selecionar, desmarcar e limpar contatos mesmo após navegar entre páginas.
-- **Exportação CSV**: `GET /api/contacts?export=csv` gera o arquivo com todos os resultados do filtro. Quando há seleção, o frontend envia `ids` e exporta somente os contatos marcados; sem seleção, exporta o resultado filtrado. O arquivo usa UTF-8 com BOM, separador `;`, cabeçalhos e escape de aspas/caracteres especiais.
-- **Fallback de demonstração**: quando o PostgreSQL ainda não possui contatos cadastrados, a API usa a massa de demonstração para manter a tela navegável. Como o schema atual não modela planos de doação nem pagamentos, os doadores continuam vindo dessa massa de demonstração; a integração de planos ao banco permanece uma limitação registrada para uma issue futura.
+- **Listagem, filtros, seleção e CSV (`GET /api/contacts` e `GET /api/users`)**: paginação no servidor (`page`, `pageSize`), filtros (`tab`, `q`, `origin`, `owner`, `period`, `funnel`, `status`, `stage`, `ids`), operadores ativos vindos de `usuarios`, exportação CSV em UTF-8 com BOM e separador `;` com nomes oficiais das etapas (`etapas_captacao`). Com `DATABASE_URL` configurada, retorna *empty state* real quando `contatos` está vazia; apenas a aba **Doadores** mantém fallback de demonstração até a modelagem de planos/pagamentos (`PB-060`/`PB-061`).
+- **Cadastro e edição em duas etapas (`POST /api/contacts` e `PATCH /api/contacts/[id]`)**: persistência transacional com `withIdempotency`, regra Inbound (`Site`/`Instagram`), bloqueio de duplicidade (`HTTP 409`, inclusive contra excluídos logicamente), controle otimista de concorrência (`versao`), preservação obrigatória da etapa na edição cadastral e trilha em `eventos_auditoria`.
+- **Ficha 360° e exclusão lógica (`GET /api/contacts/[id]` e `DELETE /api/contacts/[id]`)**: consolida contato, preferência vigente de comunicação, interações, respostas e auditoria; a exclusão exige perfil `Administrador` (`HTTP 403`), usa `withIdempotency`, aplica exclusão lógica (`excluido_em`) com auditoria e expõe `hasFinancialHistoryInDatabase` (`HTTP 409`) para integração com planos/pagamentos.
+- **Interações imutáveis (`GET/POST /api/contacts/[id]/interacoes`) e Respostas/Opt-out (`GET/POST /api/contacts/[id]/respostas`)**: rotas append-only autenticadas e idempotentes; o registro de `descadastro` aciona atomicamente a trigger `respostas_registrar_descadastro` (`PB-058`).
 
 Produção:
 
@@ -133,7 +135,7 @@ npm.cmd run build
 npm.cmd start
 ```
 
-Contas devem estar cadastradas em `usuarios` com senha Argon2id antes do primeiro acesso. A autenticação e as sessões são validadas no servidor; os demais dados operacionais da interface continuam no armazenamento local `luz-crm-v1`. Fluxos de e-mail permanecem simulados.
+Contas devem estar cadastradas em `usuarios` com senha Argon2id antes do primeiro acesso. Autenticação, sessões, recuperação de senha, operadores e o módulo de Contatos (listagem, cadastro, edição, Ficha 360°, exclusão lógica, interações e opt-out) operam diretamente no PostgreSQL; módulos das Sprints 2 a 6 permanecem no armazenamento local `luz-crm-v1` até suas respectivas entregas. Fluxos de e-mail permanecem simulados.
 
 ## Estrutura
 
@@ -143,13 +145,13 @@ prisma/migrations/       migrations SQL versionadas (constraints, triggers e see
 src/generated/prisma/    cliente TypeScript gerado pelo Prisma
 src/app/                 entrada App Router, documento e CSS global original
 src/components/          componentes funcionais CRMApp e ViewNode
-src/hooks/useCRM.js      estado React, inicialização e ciclo de vida dos efeitos
+src/hooks/useCRM.ts      estado React, inicialização e ciclo de vida dos efeitos
 src/lib/crm-controller.js fluxos, modelos de apresentação e eventos migrados
 src/lib/view-state.js    estado de apresentação e interface com APIs nativas
 src/lib/domain.cjs       regras de domínio originais, Ficha 360° e interações
 public/favicon.png       logo e favicon originais
 tests/                   domínio, estado, integração PostgreSQL, fluxos no Chrome e comparação visual
-docs/                    documentação técnica, guia de auditoria/code review e caderno de homologação QA
+docs/                    documentação técnica, guia de code review e cadernos de homologação QA/UX
 source-manifest.json     hashes SHA-256 dos arquivos de origem
 ```
 

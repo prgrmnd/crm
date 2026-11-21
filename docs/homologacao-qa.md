@@ -1,9 +1,9 @@
 # Caderno Mestre de Homologação Funcional (QA) — CRM Luz da Esperança
 
-> **Versão:** 1.1 (Consolidação Sprint 1)  
-> **Público-alvo:** Equipe de QA (`QA-01`), UX (`UX-01`), Engenharia e Liderança Técnica  
+> **Versão:** 1.2 (Alinhado ao Sprint Planning Oficial — Sprints 1 a 6)  
+> **Público-alvo:** Equipe de QA (`QA-01`), UX (`UX-01`), Engenharia e Liderança Técnica (`LT-01`)  
 > **Caráter:** Caderno oficial de validação funcional e de regras de negócio exigidas pela **WBS (53 telas / 57 tabelas)**  
-> **Documentos relacionados:** [README técnico](../README.md) · [Guia de Auditoria Técnica e Code Review](./guia-auditoria-code-review.md)
+> **Documentos relacionados:** [README técnico](../README.md) · [Caderno de Homologação UX](./homologacao-ux.md) · [Guia de Auditoria Técnica e Code Review](./guia-auditoria-code-review.md)
 
 ---
 
@@ -15,8 +15,8 @@
 4. [Ciclo 1: Homologação da Sprint 1 (Acesso, Sessão e Contatos 360°)](#4-ciclo-1-homologação-da-sprint-1-acesso-sessão-e-contatos-360)
 5. [Ciclo 2: Homologação da Sprint 2 (Funis de Captação, Perdas e Adesões)](#5-ciclo-2-homologação-da-sprint-2-funis-de-captação-perdas-e-adesões)
 6. [Ciclo 3: Homologação da Sprint 3 (Listas, Importação e Mensageria)](#6-ciclo-3-homologação-da-sprint-3-listas-importação-e-mensageria)
-7. [Ciclo 4: Homologação da Sprint 4 (Automações e Triagem Pós-Cadastro)](#7-ciclo-4-homologação-da-sprint-4-automações-e-triagem-pós-cadastro)
-8. [Ciclo 5: Homologação da Sprint 5 e 6 (Financeiro, Painel, Relatórios e Admin)](#8-ciclo-5-homologação-da-sprint-5-e-6-financeiro-painel-relatórios-e-admin)
+7. [Ciclo 4: Homologação da Sprint 4 e Auditoria Financeira da Sprint 5 (Automações, Triagem e Financeiro)](#7-ciclo-4-homologação-da-sprint-4-e-auditoria-financeira-da-sprint-5-automações-triagem-e-financeiro)
+8. [Ciclo 5: Homologação da Sprint 6 e Entrega Final (Relatórios, Admin, Guia Operacional e HO-01)](#8-ciclo-5-homologação-da-sprint-6-e-entrega-final-relatórios-admin-guia-operacional-e-ho-01)
 
 ---
 
@@ -36,13 +36,15 @@
 
 ## 2. Painel de Acompanhamento Geral
 
-| Sprint de QA | Escopo Validado (WBS) | Status Geral | Responsável | Data de Fechamento |
-| :--- | :--- | :---: | :---: | :---: |
-| **Ciclo 1 (na S2)** | Módulo 1 (Acesso) e Módulo 3 (Contatos/Ficha 360°) | `EM EXECUÇÃO` | `QA-01` / `UX-01` | `23/11/2026` |
-| **Ciclo 2 (na S3)** | Módulo 4 (Captação/Perdas) e Módulo 5 (Doadores/Adesões) | `AGUARDANDO S2` | `QA-01` / `UX-01` | `30/11/2026` |
-| **Ciclo 3 (na S4)** | Módulo 6 (Listas/Importação) e Módulo 7 (E-mails/Recorrências) | `AGUARDANDO S3` | `QA-01` / `UX-01` | `07/12/2026` |
-| **Ciclo 4 (na S5)** | Módulo 8 (Automações) e Módulo 9 (Pós-Cadastro) | `AGUARDANDO S4` | `QA-01` / `UX-01` | `14/12/2026` |
-| **Ciclo 5 (na S6)** | Módulo 10 (Doações/Recibos), Módulo 2 (Painel), Módulo 11 e 12 (`HO-01`) | `AGUARDANDO S5` | `QA-01` / `UX-01` | `18/12/2026` |
+| Ciclo de QA | Sprint de Execução | Itens do Planning | Escopo Validado e Entregáveis (WBS) | Status Geral | Responsável | Data de Fechamento |
+| :--- | :---: | :--- | :--- | :---: | :---: | :---: |
+| **Ciclo 1** | Sprint 2 (`16/11` a `23/11`) | `QA-01.1`, `QA-01.2` | Módulo 1 (Acesso), Módulo 3 (Contatos/Ficha 360°) e massa padronizada de contatos PF/PJ | `EM EXECUÇÃO` | `QA-01` | `23/11/2026` |
+| **Ciclo 2** | Sprint 3 (`24/11` a `30/11`) | `QA-02.1`, `QA-02.2` | Módulo 4 (Captação/Perdas), Módulo 5 (Doadores/Adesões), planilha modelo CSV/XLSX e massa de 10k linhas | `AGUARDANDO S2` | `QA-01` | `30/11/2026` |
+| **Ciclo 3** | Sprint 4 (`01/12` a `07/12`) | `QA-03.1` | Módulo 6 (Listas/Importação) e Módulo 7 (E-mails/Recorrências) | `AGUARDANDO S3` | `QA-01` | `07/12/2026` |
+| **Ciclo 4** | Sprint 5 (`08/12` a `14/12`) | `QA-04.1`, `QA-04.2` | Módulo 8 (Automações), Módulo 9 (Pós-Cadastro), Módulo 10 (Doações/Recibos) e Módulo 2 (Painel/Sino) | `AGUARDANDO S4` | `QA-01` | `14/12/2026` |
+| **Ciclo 5** | Sprint 6 (`15/12` a `18/12`) | `QA-05.1`, `HO-01` | Módulo 11 (Relatórios), Módulo 12 (Admin), Guia Rápido de Operação, Evidências (53 submódulos) e Regressão Geral | `AGUARDANDO S5` | `QA-01` / `UX-01` / `LT-01` | `18/12/2026` |
+
+> **Trilha de UX (`UX-01`):** os testes moderados com usuários reais, auditorias de responsividade/UI e entregas de templates visuais/impressão (`UX-01.1` a `UX-05.1`) são acompanhados no **[Caderno de Homologação UX](./homologacao-ux.md)**.
 
 ---
 
@@ -159,7 +161,7 @@ Antes de iniciar a homologação funcional, certifique-se de que o ambiente loca
   2. Selecione 2 contatos na **Página 1**, avance para a **Página 2**, selecione mais 1 contato e volte para a **Página 1**.
   3. Clique em **Exportar CSV** e abra o arquivo gerado (teste com seleção ativa e sem seleção).
 * **Resultado Esperado:** A seleção feita na Página 1 permanece preservada ao navegar entre páginas; o arquivo CSV usa UTF-8 com BOM e separador `;`, exportando somente os selecionados quando há seleção ou o resultado filtrado completo quando não há seleção.
-* **Nota técnica (versão atual `develop`):** Quando a tabela `contatos` no PostgreSQL está vazia — ou na aba **Doadores** (planos e pagamentos ainda não modelados no banco) — a API utiliza **fallback da massa de demonstração**. Para validar leitura/exportação de dados reais persistidos, popule registros em `contatos` antes do teste.
+* **Nota técnica (versão atual `develop`):** A listagem e exportação CSV de **Todos** e **Potenciais** consultam diretamente o PostgreSQL (exibindo *empty state* real quando a tabela `contatos` está vazia). Apenas a aba **Doadores** mantém fallback de demonstração até a entrega de planos/pagamentos (`PB-060`/`PB-061`).
 * **Resultado do Teste:**
   - [ ] **PASSOU**
   - [ ] **FALHOU**
@@ -174,7 +176,7 @@ Antes de iniciar a homologação funcional, certifique-se de que o ambiente loca
   2. Preencha e-mail ou telefone, avance para a Etapa 2 e selecione Origem **Site** ou **Instagram**.
   3. Conclua o cadastro. Em seguida, tente cadastrar um **novo contato usando o mesmo e-mail ou mesmo CPF/CNPJ**.
 * **Resultado Esperado:** O sistema exige ao menos e-mail ou telefone; para *Site* e *Instagram*, a classificação é travada como **Inbound**; a tentativa de cadastrar e-mail ou documento duplicado é bloqueada.
-* **Nota técnica (versão atual `develop`):** A rota `src/app/api/contacts/route.ts` implementa apenas `GET`; o fluxo de cadastro na interface ainda persiste no armazenamento local (`luz-crm-v1`). As constraints/triggers correspondentes no PostgreSQL (`contatos`) já existem e são validadas pela suíte `tests/contatos.integration.test.cjs` (`npm test`), aguardando integração da tela de cadastro ao backend.
+* **Nota técnica (versão atual `develop`):** O cadastro e a edição em duas etapas persistem diretamente na tabela `contatos` via `POST /api/contacts` e `PATCH /api/contacts/[id]`, com controle otimista (`versao`), regra Inbound, bloqueio de duplicidade (`HTTP 409`) e auditoria em `eventos_auditoria`.
 * **Resultado do Teste:**
   - [ ] **PASSOU**
   - [ ] **FALHOU**
@@ -189,6 +191,7 @@ Antes de iniciar a homologação funcional, certifique-se de que o ambiente loca
   2. Logado como **Administrador**, exclua um contato **sem histórico financeiro**.
   3. Logado como **Administrador**, tente excluir um contato que possua **vínculo/histórico financeiro** (na interface e via requisição direta a `DELETE /api/contacts/[id]`).
 * **Resultado Esperado:** Operador não possui permissão de exclusão; Administrador consegue excluir contato sem histórico financeiro (com registro em `eventos_auditoria`), mas a interface e o servidor (`HTTP 409`) recusam a exclusão quando há histórico financeiro.
+* **Nota técnica (versão atual `develop`):** A Ficha 360° (`GET /api/contacts/[id]`) e a exclusão lógica (`DELETE /api/contacts/[id]`) operam diretamente no PostgreSQL com trava `403` para Operador, idempotência e auditoria. A checagem de vínculo financeiro (`hasFinancialHistoryInDatabase`) está estruturada para receber a consulta às tabelas de planos/pagamentos na entrega de `PB-060`/`PB-061`.
 * **Resultado do Teste:**
   - [ ] **PASSOU**
   - [ ] **FALHOU**
@@ -203,7 +206,7 @@ Antes de iniciar a homologação funcional, certifique-se de que o ambiente loca
   2. Tente informar uma **data/hora futura** (ex.: amanhã) ou deixar o **resumo em branco** (ou acima de 3.000 caracteres).
   3. Salve uma interação válida e procure opções para **editar ou apagar** essa anotação na tela.
 * **Resultado Esperado:** O sistema bloqueia data futura, resumo vazio e texto acima do limite; após salva, a interação aparece na linha do tempo com autor e data/hora, **sem opção de edição ou exclusão**.
-* **Nota técnica (versão atual `develop`):** A gravação na tela opera sobre o estado local da aplicação; a imutabilidade física no PostgreSQL (tabela `interacoes`) é validada na suíte `tests/historico-opt-out.integration.test.cjs`.
+* **Nota técnica (versão atual `develop`):** O formulário rápido persiste diretamente na tabela `interacoes` via `POST /api/contacts/[id]/interacoes` (com idempotência e auditoria), protegido por triggers de imutabilidade física no PostgreSQL.
 * **Resultado do Teste:**
   - [ ] **PASSOU**
   - [ ] **FALHOU**
@@ -217,7 +220,7 @@ Antes de iniciar a homologação funcional, certifique-se de que o ambiente loca
   1. Na Ficha 360° de um contato, registre manualmente uma resposta classificando-a como **Pedido de Descadastro (Opt-out)**.
   2. Verifique a linha do tempo e o status de elegibilidade de comunicação do contato.
 * **Resultado Esperado:** O descadastro fica registrado na linha do tempo com autor/data e marca o contato como inelegível/bloqueado para futuros envios de e-mail.
-* **Nota técnica (versão atual `develop`):** Conforme registrado no [README](../README.md#histórico-e-opt-out-pb-058), o frontend ainda utiliza o estado do protótipo (`optOut` / `luz-crm-v1`), enquanto as tabelas e triggers temporais no PostgreSQL (`respostas_contato`, `preferencias_comunicacao` e auditoria `comunicacao.descadastro`) já estão implementadas e cobertas por `tests/historico-opt-out.integration.test.cjs`.
+* **Nota técnica (versão atual `develop`):** Os fluxos de resposta e opt-out na Ficha 360° persistem diretamente em `respostas_contato` via `POST /api/contacts/[id]/respostas`, acionando a trigger transacional `respostas_registrar_descadastro` que atualiza `preferencias_comunicacao` (`descadastrado`) e registra `comunicacao.descadastro` em `eventos_auditoria`.
 * **Resultado do Teste:**
   - [ ] **PASSOU**
   - [ ] **FALHOU**
@@ -226,24 +229,18 @@ Antes de iniciar a homologação funcional, certifique-se de que o ambiente loca
 
 ---
 
-### Checklist de Usabilidade e UI (`UX-01` — Sprint 1)
+### Entregável de Massa de Dados (`QA-01.2` — Sprint 2)
 
-#### `UX-01.01` — Sessão de Usabilidade com Operadores Reais (`WBS 1.1, 3.2, 3.3`)
-* **O que fazer:** Aplicar roteiro prático com 2 usuários da *Luz da Esperança* (cadastrar contato PF, registrar interação e consultar ficha) medindo dúvidas e cliques desnecessários.
-* **Nota:** Criar o diretório `docs/ux/` ao anexar o primeiro relatório de sessão de usabilidade.
-* **Resultado do Teste:**
-  - [ ] **PASSOU** *(Relatório anexado em `docs/ux/`)*
-  - [ ] **FALHOU** *(Pontos de melhoria abertos como Issues)*
-  - [ ] **BLOQUEADO**
-  - **Observação / Issue:** `—`
-
-#### `UX-01.02` — Auditoria de Responsividade e Estados Vazios (`WBS 3.1, 3.4`)
-* **O que fazer:** Validar visualização da listagem de contatos e da Ficha 360° em resolução mobile (`375px`) e tablet (`768px`), verificando ausência de quebra de layout e tratamento adequado de estados vazios.
-* **Resultado do Teste:**
+#### `QA-01.2` — Massa de Dados Padronizada de Contatos (`WBS 3.1–3.2` / MUST)
+* **O que fazer:** Preparar carga estruturada de contatos **PF e PJ** distribuídos nas **6 origens oficiais** (`instagram`, `site`, `indicacao`, `email`, `evento`, `whatsapp`), cobrindo casos de borda (com/sem e-mail, com/sem telefone, documentos válidos) para suportar a homologação das Sprints 2 e 3.
+* **Resultado Esperado:** Massa padronizada validada e disponível para uso de `QA-01`, `UX-01` e `DEVs` nos ciclos de Funis, Adesões e Listas.
+* **Resultado da Entrega:**
   - [ ] **PASSOU**
   - [ ] **FALHOU**
   - [ ] **BLOQUEADO**
   - **Observação / Issue:** `—`
+
+> **Usabilidade e UI da Sprint 1 (`UX-01.1` e `UX-01.2`):** consulte e registre no [Caderno de Homologação UX — Ciclo 1](./homologacao-ux.md#4-ciclo-1-homologação-ux-da-sprint-1-e-artefatos-da-s2-ux-011-e-ux-012).
 
 ---
 
@@ -294,7 +291,14 @@ Validar vencimento `1-28`, ausência de lançamento no caixa e aviso expresso no
 - **Observação / Issue:** `—`
 
 #### `CT-05.03` — Ciclo de Status e Intervalos de Suspensão sem Sobreposição (`PB-021`)
-Tentar cadastrar duas suspensões com datas sobrepostas (deve bloquear) e validar preservação de débitos anteriores.
+Tentar cadastrar duas suspensões com datas sobrepostas (deve bloquear via constraint GiST) e validar preservação de débitos anteriores.
+- [ ] **PASSOU**
+- [ ] **FALHOU**
+- [ ] **BLOQUEADO**
+- **Observação / Issue:** `—`
+
+#### `QA-02.2` — Planilha Modelo Oficial e Massa de Estresse de 10.000 Linhas (`PB-025` / `WBS 6.5` / MUST)
+Criar o arquivo modelo oficial CSV/XLSX para download na tela de importação e preparar planilhas de estresse (até 10.000 linhas misturando registros válidos, inválidos e duplicados) para homologação da Sprint 3.
 - [ ] **PASSOU**
 - [ ] **FALHOU**
 - [ ] **BLOQUEADO**
@@ -350,9 +354,11 @@ Confirmar ausência de e-mails de recuperação de senha no histórico operacion
 
 ---
 
-## 7. Ciclo 4: Homologação da Sprint 4 (Automações e Triagem Pós-Cadastro)
+## 7. Ciclo 4: Homologação da Sprint 4 e Auditoria Financeira da Sprint 5 (Automações, Triagem e Financeiro)
 
-*Base: `PB-034` a `PB-040` | Será detalhado e executado durante a Sprint 5 (`08/12` a `14/12/2026`)*
+*Base: `QA-04.1` (`PB-034` a `PB-040`) e `QA-04.2` (`PB-041` a `PB-048`) | Executar durante a Sprint 5 (`08/12` a `14/12/2026`)*
+
+### Bloco A — Automações e Triagem Pós-Cadastro (`QA-04.1` / `WBS 8, 9`)
 
 #### `CT-08.01` — Regras por Evento e Validação Estrita de Variáveis (`PB-034`, `PB-035`)
 Tentar salvar régua de cadastro usando `{{valor}}` ou `{{recibo}}` (deve recusar).
@@ -369,7 +375,30 @@ Ativar régua e verificar que contatos antigos não recebem disparo; testar envi
 - **Observação / Issue:** `—`
 
 #### `CT-09.01` — Unicidade e Execução Idempotente do Pós-Cadastro (`PB-038`, `PB-039`, `PB-040`)
-Criar contato elegível, editar o mesmo contato depois e confirmar que a tarefa operacional não é duplicada.
+Criar contato elegível, editar o mesmo contato depois e confirmar que a tarefa operacional não é duplicada; validar unicidade de 1 regra ativa por par `[Origem + Classificação]`.
+- [ ] **PASSOU**
+- [ ] **FALHOU**
+- [ ] **BLOQUEADO**
+- **Observação / Issue:** `—`
+
+### Bloco B — Bateria de Auditoria Financeira e Conciliação (`QA-04.2` / `WBS 2.1, 2.2, 10`)
+
+#### `CT-10.01` — Baixa Atômica, Recibo `LUZ-00001` e Pix Único (`PB-044`, `PB-045`)
+Confirmar baixa parcial/total (reduzindo saldo na competência), rejeição de referência Pix duplicada e emissão sequencial de recibo sem duplicidade na mesma transação.
+- [ ] **PASSOU**
+- [ ] **FALHOU**
+- [ ] **BLOQUEADO**
+- **Observação / Issue:** `—`
+
+#### `CT-10.02` — Reenvio de Recibo e Conciliação do Painel Executivo (`PB-046`, `PB-048`, `PB-042`)
+Reenviar recibo sem duplicar receita e conferir conciliação centavo por centavo entre Dashboard (`2.1`) e Recebimentos (`10.1`), validando separação entre receita recebida e previsão.
+- [ ] **PASSOU**
+- [ ] **FALHOU**
+- [ ] **BLOQUEADO**
+- **Observação / Issue:** `—`
+
+#### `CT-10.03` — Doador Suspenso vs Inadimplência Automática e Central do Sino (`PB-047`, `PB-041`, `PB-043`)
+Validar diferença entre doador suspenso (competência desativada sem cobrança) e inadimplente (transição automática após 2 meses sem pagamento gerando tarefa de reengajamento), e confirmar persistência da conclusão da tarefa no sino.
 - [ ] **PASSOU**
 - [ ] **FALHOU**
 - [ ] **BLOQUEADO**
@@ -377,40 +406,33 @@ Criar contato elegível, editar o mesmo contato depois e confirmar que a tarefa 
 
 ---
 
-## 8. Ciclo 5: Homologação da Sprint 5 e 6 (Financeiro, Painel, Relatórios e Admin)
+## 8. Ciclo 5: Homologação da Sprint 6 e Entrega Final (Relatórios, Admin, Guia Operacional e `HO-01`)
 
-*Base: `PB-041` a `PB-050`, `PB-004` a `PB-006` e `HO-01` | Executar entre `14/12` e `18/12/2026`*
-
-#### `CT-10.01` — Baixa Atômica, Recibo `LUZ-00001` e Pix Único (`PB-044`, `PB-045`)
-Confirmar baixa parcial/total, rejeição de referência Pix duplicada e emissão sequencial sem duplicidade.
-- [ ] **PASSOU**
-- [ ] **FALHOU**
-- [ ] **BLOQUEADO**
-- **Observação / Issue:** `—`
-
-#### `CT-10.02` — Reenvio de Recibo e Conciliação do Painel Executivo (`PB-046`, `PB-048`, `PB-042`)
-Reenviar recibo sem duplicar receita e conferir conciliação centavo por centavo entre Dashboard (`2.1`) e Recebimentos (`10.1`).
-- [ ] **PASSOU**
-- [ ] **FALHOU**
-- [ ] **BLOQUEADO**
-- **Observação / Issue:** `—`
-
-#### `CT-10.03` — Inadimplência Automática e Central do Sino (`PB-047`, `PB-041`, `PB-043`)
-Validar transição automática após 2 meses sem pagamento e persistência da conclusão da tarefa no sino.
-- [ ] **PASSOU**
-- [ ] **FALHOU**
-- [ ] **BLOQUEADO**
-- **Observação / Issue:** `—`
+*Base: `PB-049`, `PB-050`, `PB-004` a `PB-006`, `QA-05.1` e `HO-01` | Executar durante a Sprint 6 (`15/12` a `18/12/2026` — congelamento e entrega formal em `18/12/2026`)*
 
 #### `CT-11.01` — Relatórios Analíticos, Coorte e Impressão Multipáginas (`PB-049`, `PB-050`)
-Validar bloqueio de acesso para Operador, totais de coorte e layout imprimível em período vazio/cheio.
+Validar bloqueio de acesso para Operador, totais por destinação/coorte e layout imprimível multipáginas com cabeçalhos repetidos e tratamento de período vazio.
 - [ ] **PASSOU**
 - [ ] **FALHOU**
 - [ ] **BLOQUEADO**
 - **Observação / Issue:** `—`
 
 #### `CT-12.01` — Gestão de Usuários, Quórum Mínimo e Auditoria Append-Only (`PB-004`, `PB-005`, `PB-006`)
-Tentar inativar ou rebaixar o último Administrador ativo (deve bloquear) e conferir trilha de auditoria.
+Validar acesso restrito ao Administrador, tentar inativar ou rebaixar o último Administrador ativo (deve bloquear via trava serializada) e conferir trilha consolidada de auditoria append-only.
+- [ ] **PASSOU**
+- [ ] **FALHOU**
+- [ ] **BLOQUEADO**
+- **Observação / Issue:** `—`
+
+#### `QA-05.1` — Guia Rápido de Operação e Caderno de Evidências de Aceite (`WBS 1–12` / MUST)
+Elaborar e entregar o manual operacional separado por perfil (**Administrador** e **Operador de Captação**) e o caderno consolidado de evidências dos **53 submódulos** antes do congelamento em `18/12/2026`.
+- [ ] **PASSOU**
+- [ ] **FALHOU**
+- [ ] **BLOQUEADO**
+- **Observação / Issue:** `—`
+
+#### `HO-01` — Homologação Integrada, Regressão Geral e Auditoria de Constraints (Todos os Módulos / MUST)
+Executar junto com `LT-01`, `UX-01` e `DEVs` a regressão ponta a ponta dos 12 módulos, verificação integral de permissões Administrador/Operador e auditoria de constraints/triggers do PostgreSQL (correções impeditivas até `17/12/2026`; assinatura formal em `18/12/2026`).
 - [ ] **PASSOU**
 - [ ] **FALHOU**
 - [ ] **BLOQUEADO**

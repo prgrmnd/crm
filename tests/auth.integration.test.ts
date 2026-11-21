@@ -203,7 +203,11 @@ test("login aplica bloqueio, registra auditoria e revoga sessões inativas", asy
   const lockAudit = await prisma.eventoAuditoria.findMany({
     where: { entidadeId: user.id, acao: "Login bloqueado" },
   });
+  const logoutAudit = await prisma.eventoAuditoria.findMany({
+    where: { entidadeId: user.id, acao: "Logout realizado" },
+  });
   assert.equal(loginAudit.length, 2);
   assert.ok(failureAudit.length >= 9);
   assert.equal(lockAudit.length, 2);
+  assert.equal(logoutAudit.length, 1);
 });

@@ -79,6 +79,12 @@ O modelo `RequisicaoIdempotente` (`requisicoes_idempotentes`) e o wrapper `withI
 - **Chave UUID e integridade de payload**: exige o cabeçalho `Idempotency-Key` no formato UUID válido, persiste `hash_requisicao` (SHA-256 hexadecimal do payload) com unicidade por `(usuario_id, operacao, chave)` e retenção de 24 horas (`expira_em`).
 - **Controle de conflito e replay seguro**: reutilizar a mesma chave com payload diferente ou enquanto a operação original estiver em estado `'processando'` retorna `HTTP 409` (com `Retry-After: 1` quando em processamento); repetições idênticas de requisições concluídas devolvem a resposta consolidada sem reexecutar efeitos colaterais.
 
+### Redefinição de senha (PB-003)
+
+- A tela de nova senha é aberta pelo link `#redefinir=<token>` e valida o token com `GET /api/auth/redefinir-senha?token=...` antes de aceitar a alteração; links expirados, consumidos ou cancelados são recusados.
+- `POST /api/auth/redefinir-senha` exige token válido e senha com 8 a 1024 caracteres, incluindo letra maiúscula, minúscula, número e caractere especial. A senha é armazenada como Argon2id no formato PHC aceito pela constraint do banco.
+- Consumo do token, troca da senha, incremento de versão, revogação de todas as sessões ativas e registro de auditoria ocorrem em uma única transação, com bloqueio da linha do token para impedir uso concorrente.
+
 ### Domínios estáticos dos funis e carga idempotente (PB-055)
 
 Os modelos `Origem` (`origens`), `EtapaCaptacao` (`etapas_captacao`), `EtapaPerda` (`etapas_perda`) e `MotivoPerda` (`motivos_perda`) representam as tabelas de referência dos funis com códigos estáveis (`^[a-z][a-z0-9_]*$`):

@@ -187,6 +187,7 @@ export function createCRMController(model) {
     lastContactsRequestKey = "",
     lastActivity = Date.now(),
     lastSessionTouch = 0;
+  let redefinicao = { token: null, status: "idle" };
 
   const UUID_PATTERN =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1754,16 +1755,148 @@ export function createCRMController(model) {
       }</section>`
     );
   }
+  function tokenRedefinicao() {
+    if (typeof window === "undefined") return null;
+    const token = new URLSearchParams(window.location.hash.slice(1)).get(
+      "redefinir",
+    );
+    return token?.trim() || null;
+  }
+  function limparTokenRedefinicao() {
+    if (typeof window !== "undefined") window.location.hash = "";
+    redefinicao = { token: null, status: "idle" };
+  }
+  function mensagemLinkInvalido(result) {
+    const detalhe = result?.error || "Este link de redefinição não é mais válido.";
+    return /novo link/i.test(detalhe)
+      ? detalhe
+      : `${detalhe} Solicite um novo link na tela de acesso.`;
+  }
+  async function validarTokenRedefinicao(token) {
+    if (redefinicao.token === token && redefinicao.status === "pendente") return;
+    redefinicao = { token, status: "pendente" };
+    render();
+    try {
+      const response = await fetch(
+        `/api/auth/redefinir-senha?token=${encodeURIComponent(token)}`,
+        { cache: "no-store" },
+      );
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.valid !== true) {
+        if (tokenRedefinicao() !== token) return;
+        limparTokenRedefinicao();
+        render();
+        toast(mensagemLinkInvalido(result), "error");
+        return;
+      }
+      if (tokenRedefinicao() !== token) return;
+      redefinicao = { token, status: "valida" };
+      render();
+    } catch {
+      if (tokenRedefinicao() !== token) return;
+      limparTokenRedefinicao();
+      render();
+      toast(
+        "Não foi possível validar o link de redefinição. Solicite um novo link na tela de acesso.",
+        "error",
+      );
+    }
+  }
   function renderLogin() {
+    const token = tokenRedefinicao();
+    const validado =
+      Boolean(token) &&
+      redefinicao.token === token &&
+      redefinicao.status === "valida";
+    const pendente = Boolean(token) && !validado;
     $("#app").markup =
-      `<div class="login"><section class="login-story">${brand()}<div><div class="eyebrow" style="margin-top:50px">Relacionamentos que transformam</div><h1>A esperança floresce quando cuidamos dos nossos laços.</h1><p>Um espaço para acolher, cultivar relacionamentos e acompanhar cada gesto de generosidade.</p><div class="art">${art()}</div></div><footer>Centro Espírita e Obras Sociais · Parnaíba, PI</footer></section><section class="login-content"><div class="login-theme">${themeButton()}</div><div class="login-form"><div class="eyebrow">Bem-vindo ao nosso espaço</div><h2>Que bom ter você aqui.</h2><p>Entre para acompanhar os relacionamentos e contribuições da nossa comunidade.</p><form id="auth-form"><div class="error" role="alert"></div>${field("Seu e-mail", "email", "", "email", 'required autocomplete="username"')}${field("Sua senha", "password", "", "password", 'required autocomplete="current-password"')}<button class="btn" type="submit">Entrar no nosso espaço ${icon("arrow")}</button></form><div style="text-align:right;margin-top:14px"><button type="button" class="text-link" data-action="recover">Esqueci minha senha</button></div></div></section></div>`;
+      `<div class="login"><section class="login-story">${brand()}<div><div class="eyebrow" style="margin-top:50px">Relacionamentos que transformam</div><h1>A esperança floresce quando cuidamos dos nossos laços.</h1><p>Um espaço para acolher, cultivar relacionamentos e acompanhar cada gesto de generosidade.</p><div class="art">${art()}</div></div><footer>Centro Espírita e Obras Sociais · Parnaíba, PI</footer></section><section class="login-content"><div class="login-theme">${themeButton()}</div><div class="login-form"><div class="eyebrow">Bem-vindo ao nosso espaço</div><h2>${pendente ? "Validando seu link" : token ? "Uma nova senha" : "Que bom ter você aqui."}</h2><p>${pendente ? "Aguarde enquanto confirmamos o link de redefinição." : token ? "Escolha uma senha para voltar a cuidar dos nossos laços." : "Entre para acompanhar os relacionamentos e contribuições da nossa comunidade."}</p><form id="auth-form"><div class="error" role="alert"></div>${
+        !token
+          ? field(
+              "Seu e-mail",
+              "email",
+              "",
+              "email",
+              'required autocomplete="username"',
+            ) +
+            field(
+              "Sua senha",
+              "password",
+              "",
+              "password",
+              'required autocomplete="current-password"',
+            )
+          : validado
+            ? field(
+                "Nova senha",
+                "password",
+                "",
+                "password",
+                'required minlength="8" maxlength="1024" autocomplete="new-password"',
+              ) +
+              field(
+                "Confirme a nova senha",
+                "confirm",
+                "",
+                "password",
+                'required minlength="8" maxlength="1024" autocomplete="new-password"',
+              )
+            : `<div class="notice" role="status" aria-live="polite">Validando o link de redefinição…</div>`
+      }<button class="btn" type="submit" ${pendente ? "disabled" : ""}>${token ? "Salvar nova senha" : "Entrar no nosso espaço"} ${icon("arrow")}</button></form>${
+        token
+          ? `<div style="text-align:right;margin-top:14px"><button type="button" class="text-link" data-action="cancel-reset">Voltar ao acesso</button></div>`
+          : `<div style="text-align:right;margin-top:14px"><button type="button" class="text-link" data-action="recover">Esqueci minha senha</button></div>`
+      }</div></section></div>`;
     $("#auth-form").onsubmit = async (e) => {
       e.preventDefault();
+      if (pendente) return;
       const f = e.currentTarget,
         btn = $("button[type=submit]", f);
       btn.disabled = true;
       try {
         const d = Object.fromEntries(runtime.formEntries(f));
+        if (token) {
+          if (d.password !== d.confirm) {
+            throw Error("As senhas precisam ser iguais.");
+          }
+          if (
+            d.password.length < 8 ||
+            d.password.length > 1024 ||
+            !/[a-z]/.test(d.password) ||
+            !/[A-Z]/.test(d.password) ||
+            !/[0-9]/.test(d.password) ||
+            !/[^A-Za-z0-9]/.test(d.password)
+          ) {
+            throw Error(
+              "A senha deve ter entre 8 e 1024 caracteres, incluindo letras maiúsculas, minúsculas, números e caracteres especiais.",
+            );
+          }
+          const response = await fetch("/api/auth/redefinir-senha", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ token, password: d.password }),
+          });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            const mensagem = result.error || "Não foi possível redefinir a senha.";
+            const erroDeToken =
+              [400, 404, 410].includes(response.status) &&
+              !/^A senha\b/i.test(mensagem);
+            if (erroDeToken) {
+              limparTokenRedefinicao();
+              render();
+              toast(mensagemLinkInvalido(result), "error");
+              return;
+            }
+            throw Error(mensagem);
+          }
+          await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+          limparTokenRedefinicao();
+          user = null;
+          render();
+          toast("Senha redefinida. Você já pode entrar.");
+          return;
+        }
         const response = await fetch("/api/auth/login", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -3396,7 +3529,8 @@ export function createCRMController(model) {
       return;
     }
     try {
-      if (!["recover", "close", "reset-link"].includes(a)) activeUser();
+      if (!["recover", "close", "reset-link", "cancel-reset"].includes(a))
+        activeUser();
       switch (a) {
         case "nav":
           navigate(id);
@@ -3718,6 +3852,10 @@ export function createCRMController(model) {
             logout();
           }, 0);
           break;
+        case "cancel-reset":
+          limparTokenRedefinicao();
+          render();
+          break;
         case "tasks":
           tasks();
           break;
@@ -3873,6 +4011,16 @@ export function createCRMController(model) {
   runtime.onWindow("hashchange", () => {
     if (!user) {
       closeModal();
+      const token = tokenRedefinicao();
+      if (!token) {
+        redefinicao = { token: null, status: "idle" };
+        render();
+        return;
+      }
+      if (redefinicao.token !== token || redefinicao.status !== "valida") {
+        validarTokenRedefinicao(token);
+        return;
+      }
       render();
     }
   });
@@ -3916,42 +4064,49 @@ export function createCRMController(model) {
       state = raw ? D.repairLegacyHistory(JSON.parse(raw)) : D.createEmptyState();
       if (state.version !== 1 || !Array.isArray(state.contacts))
         throw Error("Dados locais incompatíveis.");
-      const response = await fetch("/api/auth/session", { cache: "no-store" });
-      if (response.ok) {
-        const result = await response.json();
-        const account = result.user;
-        if (
-          !account ||
-          typeof account.id !== "string" ||
-          typeof account.name !== "string" ||
-          typeof account.email !== "string" ||
-          !["administrador", "operador_captacao"].includes(account.profile)
-        )
-          throw Error("O servidor retornou um perfil de acesso inválido.");
-        user = {
-          id: account.id,
-          name: account.name,
-          email: account.email,
-          role:
-            account.profile === "administrador"
-              ? "Administrador"
-              : "Operador de Captação",
-          active: true,
-        };
-        const savedUser = state.users.find((u) => u.id === user.id);
-        if (savedUser) Object.assign(savedUser, user);
-        else state.users.push({ ...user });
-        page = user.role === "Administrador" ? "dashboard" : "funnel";
-        lastActivity = Date.now();
-        lastSessionTouch = 0;
-        fetchServerUsers();
-      } else if (response.status !== 401) {
-        const result = await response.json().catch(() => ({}));
-        throw Error(result.error || "Não foi possível validar a sessão.");
+      const resetToken = tokenRedefinicao();
+      if (!resetToken) {
+        const response = await fetch("/api/auth/session", { cache: "no-store" });
+        if (response.ok) {
+          const result = await response.json();
+          const account = result.user;
+          if (
+            !account ||
+            typeof account.id !== "string" ||
+            typeof account.name !== "string" ||
+            typeof account.email !== "string" ||
+            !["administrador", "operador_captacao"].includes(account.profile)
+          )
+            throw Error("O servidor retornou um perfil de acesso inválido.");
+          user = {
+            id: account.id,
+            name: account.name,
+            email: account.email,
+            role:
+              account.profile === "administrador"
+                ? "Administrador"
+                : "Operador de Captação",
+            active: true,
+          };
+          const savedUser = state.users.find((u) => u.id === user.id);
+          if (savedUser) Object.assign(savedUser, user);
+          else state.users.push({ ...user });
+          page = user.role === "Administrador" ? "dashboard" : "funnel";
+          lastActivity = Date.now();
+          lastSessionTouch = 0;
+          fetchServerUsers();
+        } else if (response.status !== 401) {
+          const result = await response.json().catch(() => ({}));
+          throw Error(result.error || "Não foi possível validar a sessão.");
+        }
       }
       D.reconcile(state, { id: "system", name: "Sistema" });
       save();
-      render();
+      if (resetToken) {
+        await validarTokenRedefinicao(resetToken);
+      } else {
+        render();
+      }
     } catch (err) {
       $("#app").markup =
         `<div class="login-content" style="min-height:100vh"><div class="login-form">${brand()}<h2 style="margin-top:35px">Vamos preparar nosso espaço.</h2><p>${esc(err.message)}</p><p>Execute <b>npm run dev</b> e abra <b>http://localhost:3000</b>.</p><small>Para remover dados locais incompatíveis, limpe o armazenamento deste site no navegador.</small></div></div>`;

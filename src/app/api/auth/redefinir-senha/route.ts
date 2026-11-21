@@ -186,11 +186,12 @@ export async function POST(request: NextRequest) {
         };
       }
 
+      // Mensagem idêntica à de token inexistente: não revela se a conta existe.
       if (!tokenRecord.usuario || !tokenRecord.usuario.ativo) {
         return {
           sucesso: false,
           status: 400,
-          erro: "Usuário inativo ou não encontrado.",
+          erro: "Token de recuperação inválido ou inexistente.",
         };
       }
 

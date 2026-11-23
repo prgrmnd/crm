@@ -2,7 +2,8 @@
 
 > **Versão:** 1.0 (Consolidação Sprint 1)  
 > **Público-alvo:** Engenheiros de Software, Revisores e Liderança Técnica (Tech Lead)  
-> **Caráter:** Referência normativa obrigatória para abertura, manutenção e homologação de Pull Requests (PRs)
+> **Caráter:** Referência normativa obrigatória para abertura, manutenção e homologação de Pull Requests (PRs)  
+> **Documentos relacionados:** [README](../README.md) · [Documentação Técnica](./documentacao-tecnica.md) · [Integração Sprint 1 → PostgreSQL](./integracao-sprint-1-postgresql.md)
 
 ---
 

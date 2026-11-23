@@ -3,7 +3,7 @@
 > **Versão:** 1.2 (Alinhado ao Sprint Planning Oficial — Sprints 1 a 6)  
 > **Público-alvo:** Equipe de QA (`QA-01`), UX (`UX-01`), Engenharia e Liderança Técnica (`LT-01`)  
 > **Caráter:** Caderno oficial de validação funcional e de regras de negócio exigidas pela **WBS (53 telas / 57 tabelas)**  
-> **Documentos relacionados:** [README técnico](../README.md) · [Caderno de Homologação UX](./homologacao-ux.md) · [Guia de Auditoria Técnica e Code Review](./guia-auditoria-code-review.md)
+> **Documentos relacionados:** [README](../README.md) · [Documentação Técnica](./documentacao-tecnica.md) · [Caderno de Homologação UX](./homologacao-ux.md) · [Guia de Auditoria Técnica e Code Review](./guia-auditoria-code-review.md)
 
 ---
 
@@ -50,7 +50,7 @@
 
 ## 3. Pré-requisitos de Ambiente e Massa de Dados
 
-Antes de iniciar a homologação funcional, certifique-se de que o ambiente local ou de homologação esteja configurado conforme o [README técnico](../README.md):
+Antes de iniciar a homologação funcional, certifique-se de que o ambiente local ou de homologação esteja configurado conforme o [README](../README.md) e a [Documentação Técnica](./documentacao-tecnica.md):
 
 1. **Banco de dados e aplicação ativos:**
    - PostgreSQL 13+ acessível via `DATABASE_URL` no arquivo `.env`.
@@ -61,12 +61,12 @@ Antes de iniciar a homologação funcional, certifique-se de que o ambiente loca
    - **Operador de Captação ativo** (`perfil = 'operador_captacao'`, `ativo = true`).
    - **Usuário inativo** (`ativo = false`) para validação de bloqueio no `CT-01.03`.
 3. **Massa de contatos:**
-   - Para testar dados persistidos em `GET /api/contacts` (`CT-03.01`), cadastre registros na tabela `contatos` do PostgreSQL (quando vazia, a API utiliza a massa de demonstração em memória).
+   - Para testar dados persistidos em `GET /api/contacts` (`CT-03.01`), cadastre registros na tabela `contatos` do PostgreSQL (com `DATABASE_URL` configurada, as abas **Todos** e **Potenciais** exibem *empty state* real quando vazias; apenas a aba **Doadores** mantém fallback de demonstração até `PB-060`/`PB-061`).
    - Para o `CT-03.03`, tenha ao menos 1 contato **sem histórico financeiro** e 1 contato **com vínculo/histórico financeiro**.
 4. **Inspeção de evidências técnicas:**
    - Em `NODE_ENV=development`, e-mails de recuperação são simulados no terminal do servidor com o prefixo `[DEV E-MAIL]`.
    - Para auditar tabelas do banco (`usuarios`, `sessoes`, `tentativas_login`, `tokens_recuperacao`, `eventos_auditoria`), utilize `npm run db:studio` ou cliente SQL (`psql`).
-   - Para validar triggers e constraints reais do PostgreSQL que ainda não possuem tela ligada, execute a suíte automatizada (`npm test`) descrita no [README](../README.md#verificação).
+   - Para validar triggers e constraints reais do PostgreSQL que ainda não possuem tela ligada, execute a suíte automatizada (`npm test`) descrita na [Documentação Técnica](./documentacao-tecnica.md#5-verificação-e-testes).
 
 ---
 
@@ -144,7 +144,7 @@ Antes de iniciar a homologação funcional, certifique-se de que o ambiente loca
   4. Tente abrir o **mesmo link** de recuperação novamente.
   5. Volte ao **Navegador A** (que estava logado antes) e tente navegar no sistema.
 * **Resultado Esperado:** A senha é alterada; a reutilização do link é recusada; a sessão antiga no Navegador A é invalidada imediatamente. *(Teste complementar: validar link expirado após 15 minutos).*
-* **Nota técnica (versão atual `develop`):** A tabela `tokens_recuperacao` (com TTL de 15 minutos, unicidade de token ativo e imutabilidade) já está implementada e coberta por `tests/tokens-recuperacao.integration.test.cjs`, porém **a tela e a rota de redefinição de senha (`PB-003`) ainda não foram entregues na `develop`**. Marcar como `BLOQUEADO` até o merge da entrega correspondente.
+* **Nota técnica (versão atual `develop`):** A rota `GET/POST /api/auth/redefinir-senha` e a tela `#redefinir=<token>` (`PB-003`) já estão integradas na `develop` (incluindo bloqueio do formulário até validação do token, limpeza do token na URL e erro opaco para conta inativa). Utilize o link impresso em `[DEV E-MAIL]` no console do servidor em desenvolvimento.
 * **Resultado do Teste:**
   - [ ] **PASSOU**
   - [ ] **FALHOU**

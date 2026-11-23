@@ -1,7 +1,7 @@
 # Plano e Status da Integração Sprint 1 → PostgreSQL (Saída do `localStorage`)
 
-> **Status Atual:** ✅ **Integração aplicada na branch atual** (exceto issue `#13` / `PB-003`, em desenvolvimento paralelo na sua própria branch).  
-> **Documentos relacionados:** [README técnico](../README.md) · [Guia de Auditoria e Code Review](./guia-auditoria-code-review.md) · [Caderno de Homologação QA](./homologacao-qa.md) · [Caderno de Homologação UX](./homologacao-ux.md)
+> **Status Atual:** ✅ **Integração da Sprint 1 completa na branch atual** (incluindo issue `#13` / `PB-003`, integrada via `PR #55`).  
+> **Documentos relacionados:** [README](../README.md) · [Documentação Técnica](./documentacao-tecnica.md) · [Guia de Auditoria e Code Review](./guia-auditoria-code-review.md) · [Caderno de Homologação QA](./homologacao-qa.md) · [Caderno de Homologação UX](./homologacao-ux.md)
 
 ---
 
@@ -11,7 +11,7 @@
 | :--- | :--- | :--- | :--- | :--- |
 | **`#11` (`PB-001`)** Login/Sessão/Logout | ✅ `usuarios`, `sessoes`, `tentativas_login`, `eventos_auditoria` | ✅ `POST /api/auth/login`, `GET/PUT /api/auth/session`, `POST /api/auth/logout` (com auditoria de logout em `eventos_auditoria`) | ✅ Integrado via `fetch` (sem gravar auditoria de logout no `localStorage`) | ✅ **Integrado** |
 | **`#12` (`PB-002`)** Recuperação de Senha | ✅ `tokens_recuperacao`, `eventos_auditoria` | ✅ `POST /api/auth/recuperar-senha` (com auditoria sanitizada em `eventos_auditoria`) | ✅ Botão **"Esqueci minha senha"** restaurado em `renderLogin()` + tratamento explícito de `HTTP 429`/`400` em `recover()` | ✅ **Integrado** *(SMTP real na Sprint 3; rate limit distribuído em backlog de infra)* |
-| **`#13` (`PB-003`)** Redefinição de Senha | ✅ `tokens_recuperacao` | ⏳ Em andamento em branch dedicada (`feat/issue-13-redefinicao-senha`) | ⏳ Em andamento | ⏳ **Fora deste pacote (em execução separada)** |
+| **`#13` (`PB-003`)** Redefinição de Senha | ✅ `tokens_recuperacao`, `usuarios`, `sessoes`, `eventos_auditoria` | ✅ `GET/POST /api/auth/redefinir-senha` (validação prévia de token, troca Argon2id + revogação de sessões + auditoria em transação única e erro opaco para conta inativa) | ✅ Tela `#redefinir=<token>` com bloqueio do formulário até validação do token e limpeza do token da URL | ✅ **Integrado** |
 | **`#14` (`PB-007`)** Listagem, Filtros, Seleção e CSV | ✅ `contatos`, `origens`, `etapas_captacao`, `usuarios`, `preferencias_comunicacao` | ✅ `GET /api/contacts` + `GET /api/users?ativo=true`; corrigidos `situacao: "descadastrado"`, `vigenteDesde <= now`, `stage` (`0–3`) ↔ `ordem` (`1–4`), `ownerName`, validação de UUID em `ids`/`owner`, nomes oficiais das etapas no CSV e remoção de fallback silencioso | ✅ Sem mesclagem em `state.contacts` (`localStorage`); operadores carregados via `/api/users`; seleção em lote e exportação CSV via API | ✅ **Integrado** *(aba Doadores mantém fallback até `PB-060`/`PB-061`)* |
 | **`#15` (`PB-008`)** Cadastro/Edição em 2 Etapas | ✅ `contatos` + trigger `contatos_preparar_gravacao` + `contatos_inicializar_preferencia` | ✅ `POST /api/contacts` (idempotente + auditoria) e `PATCH /api/contacts/[id]` (concorrência otimista via `versao`, preservação obrigatória da etapa + auditoria `antes`/`depois`) | ✅ Formulário guiado em 2 etapas conectado a `POST`/`PATCH` via `fetch`, com `Idempotency-Key` e operadores do banco | ✅ **Integrado** |
 | **`#16` (`PB-009`)** Ficha 360° e Exclusão Lógica | ✅ `contatos.excluido_em`, `eventos_auditoria`, `requisicoes_idempotentes` | ✅ `GET /api/contacts/[id]` (Ficha 360° consolidada) e `DELETE /api/contacts/[id]` refatorado (sem `body.state`, exige Admin `403`, idempotência, soft-delete em `contatos`, auditoria transacional e hook `hasFinancialHistoryInDatabase`) | ✅ Ficha 360° carrega de `GET /api/contacts/[id]` e exclusão chama `DELETE /api/contacts/[id]` com `Idempotency-Key` | ✅ **Integrado** *(trava financeira real liga quando `PB-060`/`PB-061` existirem)* |
@@ -22,6 +22,7 @@
 
 ## 2. Rotas da API Entregues e Contratos Ativos
 
+- **`GET / POST /api/auth/redefinir-senha`** (`src/app/api/auth/redefinir-senha/route.ts`): valida token de recuperação (`GET`) e conclui a redefinição de senha (`POST`) em transação única com bloqueio de linha, revogação de todas as sessões ativas, auditoria e erro opaco para conta inativa.
 - **`GET /api/users?ativo=true`** (`src/app/api/users/route.ts`): lista operadores ativos da tabela `usuarios` para filtros e atribuição de responsável.
 - **`GET /api/contacts`** (`src/app/api/contacts/route.ts`): consulta paginada e exportação CSV no PostgreSQL (retorna lista vazia quando `DATABASE_URL` está configurada e não há registros; fallback de demonstração restrito à aba `donors` até `PB-060` ou ambientes sem `DATABASE_URL`).
 - **`POST /api/contacts`** (`src/app/api/contacts/route.ts`): cadastro de contato com `getActiveSession`, `withIdempotency`, validação de duplicidade (`409` inclusive contra excluídos logicamente), regra Inbound (`Site`/`Instagram`) e `recordAuditEvent`.
@@ -33,13 +34,12 @@
 
 ---
 
-## 3. Pontos Pendentes Esperados (Fora do Escopo desta Correção)
+## 3. Pontos Pendentes Esperados (Fora do Escopo da Sprint 1)
 
-1. **Issue `#13` (`PB-003`) — Redefinição de Senha:** rota `POST /api/auth/redefinir-senha` e tela de redefinição estão sendo desenvolvidas em paralelo na branch `feat/issue-13-redefinicao-senha`.
-2. **Planos de Doação, Aba Doadores e Trava Financeira Real (`PB-060`/`PB-061`):** previstos nas Sprints 2 e 5; o serviço `hasFinancialHistoryInDatabase` já está isolado em `src/lib/contact-service.ts` para receber a consulta assim que as tabelas existirem.
-3. **Envio SMTP real (`PB-002`):** previsto na Sprint 3 (permanece `[DEV E-MAIL]` em desenvolvimento).
-4. **Rate limit distribuído em serverless para `POST /api/auth/recuperar-senha`:** `src/lib/rate-limit.ts` permanece em memória de processo (funcional localmente; em produção serverless Vercel/Neon recomenda-se migrar para store distribuído ou tabela dedicada em melhoria futura).
-5. **Módulos de Sprints 2 a 6:** Funis, Listas, E-mails/Automações, Financeiro, Relatórios, Gestão de Usuários e tela de Auditoria permanecem no estado de protótipo até suas respectivas sprints; `luz-crm-theme` continua no `localStorage`.
+1. **Planos de Doação, Aba Doadores e Trava Financeira Real (`PB-060`/`PB-061`):** previstos nas Sprints 2 e 5; o serviço `hasFinancialHistoryInDatabase` já está isolado em `src/lib/contact-service.ts` para receber a consulta assim que as tabelas existirem.
+2. **Envio SMTP real (`PB-002`):** previsto na Sprint 3 (permanece `[DEV E-MAIL]` em desenvolvimento).
+3. **Rate limit distribuído em serverless para `POST /api/auth/recuperar-senha`:** `src/lib/rate-limit.ts` permanece em memória de processo (funcional localmente; em produção serverless Vercel/Neon recomenda-se migrar para store distribuído ou tabela dedicada em melhoria futura).
+4. **Módulos de Sprints 2 a 6:** Funis, Listas, E-mails/Automações, Financeiro, Relatórios, Gestão de Usuários e tela de Auditoria permanecem no estado de protótipo até suas respectivas sprints; `luz-crm-theme` continua no `localStorage`.
 
 ---
 
@@ -61,5 +61,5 @@ npm test
 | Caso | Status para homologação ponta a ponta no PostgreSQL |
 | :--- | :--- |
 | `CT-01.01` a `CT-01.04` | ✅ Destravados (incluindo botão *"Esqueci minha senha"*, `429` na UI e auditoria de logout/recuperação) |
-| `CT-01.05` (`#13`) | ⏳ Aguardando merge da branch `feat/issue-13-redefinicao-senha` |
+| `CT-01.05` (`#13`) | ✅ Destravado (`GET/POST /api/auth/redefinir-senha` e tela `#redefinir=<token>` integradas na branch atual) |
 | `CT-03.01` a `CT-03.05` | ✅ Destravados 100% no PostgreSQL (exceto aba *Doadores* / vínculo financeiro real até `PB-060`/`PB-061`) |

@@ -3,7 +3,7 @@
 > **Versão:** 1.0 (Alinhado ao Sprint Planning Oficial — Sprints 1 a 6)  
 > **Público-alvo:** Especialista de UX (`UX-01`), Equipe de QA (`QA-01`), Engenharia e Liderança Técnica (`LT-01`)  
 > **Caráter:** Caderno oficial de validação de usabilidade, auditoria de UI/responsividade, acessibilidade e entrega de artefatos visuais exigidos pela **WBS (53 telas / 57 tabelas)**  
-> **Documentos relacionados:** [README técnico](../README.md) · [Caderno de Homologação QA](./homologacao-qa.md) · [Guia de Auditoria Técnica e Code Review](./guia-auditoria-code-review.md)
+> **Documentos relacionados:** [README](../README.md) · [Documentação Técnica](./documentacao-tecnica.md) · [Caderno de Homologação QA](./homologacao-qa.md) · [Guia de Auditoria Técnica e Code Review](./guia-auditoria-code-review.md)
 
 ---
 
@@ -55,7 +55,7 @@
 
 ## 3. Pré-requisitos de Ambiente, Participantes e Dispositivos
 
-Antes de executar cada ciclo de UX, prepare o ambiente conforme o [README técnico](../README.md) e valide os itens abaixo:
+Antes de executar cada ciclo de UX, prepare o ambiente conforme o [README](../README.md) e valide os itens abaixo:
 
 1. **Ambiente funcional e massa de dados:**
    - Aplicação em execução com PostgreSQL ativo e migrations aplicadas (ou ambiente de homologação equivalente).

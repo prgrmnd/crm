@@ -1,8 +1,9 @@
 # Issues de QA e UX — Milestone Sprint 2
 
 > **Milestone no GitHub:** `Sprint 2 - Funis, Ciclo do Doador e Outbox Pattern`  
-> **Recorte:** Todos os fluxos da Sprint 1 já integrados ao PostgreSQL na branch atual (`/api/auth/login`, `/api/auth/session`, `/api/auth/logout`, `/api/auth/recuperar-senha`, `/api/users`, `/api/contacts`, `/api/contacts/[id]`, `/api/contacts/[id]/interacoes` e `/api/contacts/[id]/respostas`), além dos artefatos habilitadores da Sprint 2 (massa de dados e template visual do Comprovante de Adesão para `#46`).  
-> **Fora deste lote por enquanto:** Redefinição de senha (`#13` — em andamento em branch dedicada), envio SMTP real (Sprint 3) e aba Doadores / trava financeira real (`PB-060`/`PB-061`).
+> **Recorte:** Todos os fluxos da Sprint 1 já integrados ao PostgreSQL na branch atual (`/api/auth/login`, `/api/auth/session`, `/api/auth/logout`, `/api/auth/recuperar-senha`, `/api/auth/redefinir-senha`, `/api/users`, `/api/contacts`, `/api/contacts/[id]`, `/api/contacts/[id]/interacoes` e `/api/contacts/[id]/respostas`), além dos artefatos habilitadores da Sprint 2 (massa de dados e template visual do Comprovante de Adesão para `#46`).  
+> **Fora deste lote por enquanto:** Envio SMTP real (Sprint 3) e aba Doadores / trava financeira real (`PB-060`/`PB-061`).  
+> **Documentos relacionados:** [README](../README.md) · [Documentação Técnica](./documentacao-tecnica.md) · [Caderno de Homologação QA](./homologacao-qa.md) · [Caderno de Homologação UX](./homologacao-ux.md)
 
 ---
 

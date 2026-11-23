@@ -1,15 +1,103 @@
-# Luz da Esperança · CRM (Next.js + Prisma + PostgreSQL)
+# Luz da Esperança · CRM
 
-Aplicação web independente em **React 19** e **Next.js 16 (App Router)** com **Prisma ORM 7** e **PostgreSQL** para gestão de relacionamento, captação e doadores da *Luz da Esperança*. Não é necessário executar o servidor nem carregar arquivos do protótipo original.
+## Sobre o Projeto
+
+O **CRM Luz da Esperança** é uma aplicação web de gestão de relacionamento, captação de recursos e acompanhamento de doadores desenvolvida para a **Luz da Esperança — Centro Espírita e Obras Sociais** *(Parnaíba, PI)*.
+
+### Do que se trata
+O sistema centraliza toda a jornada de relacionamento com potenciais doadores e doadores recorrentes ou pontuais: cadastro unificado de contatos PF/PJ, Ficha 360° com histórico imutável de interações e controle de opt-out, condução pelos funis de captação e de perdas, organização de listas e campanhas de e-mail, acompanhamento de doações/pendências e trilha completa de auditoria.
+
+Construído em **Next.js 16 (App Router)**, **React 19**, **Prisma ORM 7** e **PostgreSQL 13+**.
+
+### Para quem foi feito
+O sistema foi projetado para os **voluntários da Luz da Esperança e coordenadores** envolvidos na captação de recursos, no cuidado com doadores e na gestão das obras sociais da instituição — oferecendo um espaço único, simples e confiável para organizar o relacionamento diário, acompanhar contribuições e apoiar decisões administrativas com transparência.
+
+### Estado atual da entrega
+- **Integrado ao PostgreSQL (Sprint 1 completa):** autenticação, sessões revogáveis, recuperação e redefinição de senha (`PB-001` a `PB-003`), operadores e módulo completo de **Contatos / Ficha 360°** (`PB-007` a `PB-011`: listagem, filtros, CSV, cadastro/edição em 2 etapas, exclusão lógica, interações imutáveis e respostas/opt-out).
+- **Em evolução (Sprints 2 a 6):** Funis, Doadores/Adesões, Listas, E-mails/Automações, Doações e Pendências, Relatórios, Usuários e Auditoria na interface permanecem no armazenamento local (`luz-crm-v1`) até suas respectivas entregas. Fluxos de e-mail permanecem simulados no console (`[DEV E-MAIL]`).
+
+> Acompanhe a matriz detalhada por issue/PBI em [docs/integracao-sprint-1-postgresql.md](./docs/integracao-sprint-1-postgresql.md).
 
 ---
 
-## Estado Atual
+## Telas e Abas do Sistema
 
-- **Integrado ao PostgreSQL (Sprint 1 completa):** autenticação, sessões revogáveis, recuperação e redefinição de senha (`PB-001` a `PB-003`), operadores e módulo de **Contatos** (`PB-007` a `PB-011`: listagem, filtros, CSV, cadastro/edição em 2 etapas, Ficha 360°, exclusão lógica, interações imutáveis e respostas/opt-out).
-- **Em evolução (Sprints 2 a 6):** Funis, Listas, E-mails/Automações, Financeiro, Relatórios e Administração permanecem no armazenamento local (`luz-crm-v1`) até suas respectivas entregas. Fluxos de e-mail permanecem simulados no console (`[DEV E-MAIL]`).
+Espaço reservado para as capturas oficiais de cada aba do CRM (salve as imagens em `docs/images/` e descomente a tag `<img>` correspondente).
 
-> Veja a matriz completa por issue/PBI em [docs/integracao-sprint-1-postgresql.md](./docs/integracao-sprint-1-postgresql.md).
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Acesso · Login e Recuperação de Senha</strong><br />
+      <sub>Autenticação com proteção contra força bruta, sessão por inatividade, recuperação neutra e redefinição com token único.</sub><br /><br />
+      <img src="https://imgur.com/Z2lGCnk.png" alt="Tela de Login e Recuperação de Senha" width="100%" />
+    </td>
+    <td width="50%" valign="top">
+      <strong>Visão geral</strong> <em>(Admin)</em><br />
+      <sub>Painel executivo com indicadores de relacionamento, evolução de arrecadação, pendências e ações prioritárias.</sub><br /><br />
+      <img src="https://imgur.com/jtLmXhM.png" alt="Aba Visão geral" width="100%" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Funil de captação</strong><br />
+      <sub>Acompanhamento em quadro Kanban e lista pelas 4 etapas oficiais até a decisão de doação.</sub><br /><br />
+      <img src="https://imgur.com/9FHvgEz.png" alt="Aba Funil de captação" width="100%" />
+    </td>
+    <td width="50%" valign="top">
+      <strong>Funil de perdas</strong><br />
+      <sub>Gestão de perdas nas 5 etapas oficiais, com motivos padronizados e agendamento de retomada.</sub><br /><br />
+      <img src="https://imgur.com/B6PZI8L.png" alt="Aba Funil de perdas" width="100%" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Contatos e Ficha 360°</strong><br />
+      <sub>Base central PF/PJ com filtros, CSV, cadastro em 2 etapas, interações imutáveis, respostas e opt-out.</sub><br /><br />
+      <img src="https://imgur.com/B6PZI8L.png" alt="Aba Contatos e Ficha 360°" width="100%" />
+    </td>
+    <td width="50%" valign="top">
+      <strong>Doadores</strong><br />
+      <sub>Acompanhamento de doadores ativos, planos pontuais ou recorrentes e comprovante de adesão.</sub><br /><br />
+      <img src="https://imgur.com/Z4UtXbN.png" alt="Aba Doadores" width="100%" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Listas e campanhas</strong><br />
+      <sub>Segmentação de contatos, importação de planilhas e organização de listas para campanhas.</sub><br /><br />
+      <img src="https://imgur.com/3duaNnq.png" alt="Aba Listas e campanhas" width="100%" />
+    </td>
+    <td width="50%" valign="top">
+      <strong>E-mails</strong><br />
+      <sub>Envios, templates institucionais, recorrências e automações respeitando o opt-out vigente.</sub><br /><br />
+      <img src="https://imgur.com/qh74qmM.png" alt="Aba E-mails" width="100%" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Doações e pendências</strong><br />
+      <sub>Controle de contribuições recebidas, parcelas em aberto/atraso, baixa e emissão de recibos.</sub><br /><br />
+      <img src="https://imgur.com/3udzbwC.png" alt="Aba Doações e pendências" width="100%" />
+    </td>
+    <td width="50%" valign="top">
+      <strong>Relatórios</strong> <em>(Admin)</em><br />
+      <sub>Consolidados analíticos de captação, conversão, perdas e arrecadação com suporte à impressão.</sub><br /><br />
+      <img src="https://imgur.com/DEM9Fpe.png" alt="Aba Relatórios" width="100%" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Usuários e acessos</strong> <em>(Admin)</em><br />
+      <sub>Gestão de contas da equipe, atribuição de perfis de permissão e ativação/inativação de acessos.</sub><br /><br />
+      <img src="https://imgur.com/jqlaUd7.png" alt="Aba Usuários e acessos" width="100%" />
+    </td>
+    <td width="50%" valign="top">
+      <strong>Histórico de auditoria</strong> <em>(Admin)</em><br />
+      <sub>Trilha imutável (<code>append-only</code>) de eventos críticos com ator, entidade, antes/depois sanitizado e correlação.</sub><br /><br />
+      <img src="https://imgur.com/B0DULX9.png" alt="Aba Histórico de auditoria" width="100%" />
+    </td>
+  </tr>
+</table>
 
 ---
 
@@ -17,7 +105,7 @@ Aplicação web independente em **React 19** e **Next.js 16 (App Router)** com *
 
 - **Node.js 20.19+**
 - **PostgreSQL 13+** (necessário para autenticação, APIs e migrations)
-- **Docker Desktop** (necessário para `npm test`)
+- **Docker Desktop** (necessário para a suíte automatizada `npm test`)
 - **Google Chrome / Chromium** (opcional, para `test:browser` e `test:visual`)
 
 ---
@@ -71,7 +159,7 @@ Para deploy na **Vercel + Neon** ([vercel.json](./vercel.json), `DATABASE_URL` p
 
 ---
 
-## Scripts
+## Scripts Disponíveis
 
 | Script | Descrição |
 | :--- | :--- |
@@ -101,17 +189,79 @@ Detalhes sobre Docker (`crm_test`), `testWithDatabase` e testes de navegador/vis
 
 ---
 
-## Estrutura
+## Estrutura Detalhada do Projeto
 
 ```text
-prisma/         schema.prisma e migrations SQL versionadas
-src/app/        App Router, rotas de API (/api/*), layout e CSS global
-src/components/ componentes React (CRMApp e ViewNode)
-src/hooks/      estado e ciclo de vida React (useCRM.ts)
-src/lib/        serviços de domínio, autenticação, idempotência, auditoria e controlador
-scripts/        testes com Postgres, bootstrap admin e importação de origem
-tests/          domínio, estado, integração PostgreSQL, navegador e paridade visual
-docs/           documentação técnica, integração, code review e cadernos de QA/UX
+crm/
+├── prisma/
+│   ├── schema.prisma                         # Modelo relacional do Prisma ORM 7 (13 tabelas)
+│   └── migrations/                           # Migrations SQL versionadas (constraints, triggers, índices e seeds)
+├── public/
+│   └── favicon.png                           # Logo e favicon institucionais
+├── scripts/
+│   ├── bootstrap-admin.mjs                   # Provisionamento seguro do primeiro administrador (Argon2id + auditoria)
+│   ├── test-with-postgres.cjs                # Orquestra PostgreSQL 16 via Docker Compose para `npm test`
+│   └── import-source.cjs                     # Registro de procedência da importação inicial do protótipo
+├── src/
+│   ├── app/
+│   │   ├── layout.tsx                        # Layout raiz e metadados do App Router
+│   │   ├── page.tsx                          # Ponto de entrada da aplicação React (CRMApp)
+│   │   ├── globals.css                       # Folha de estilos global, temas claro/escuro e impressão
+│   │   └── api/
+│   │       ├── auth/
+│   │       │   ├── login/route.ts            # POST login com Argon2id, bloqueio por força bruta e cookie HttpOnly
+│   │       │   ├── logout/route.ts           # POST revogação de sessão com auditoria
+│   │       │   ├── session/route.ts          # GET validação de sessão e PUT renovação de atividade (30 min)
+│   │       │   ├── recuperar-senha/route.ts  # POST solicitação neutra de recuperação com rate limit e SHA-256
+│   │       │   └── redefinir-senha/route.ts  # GET validação de token e POST redefinição transacional de senha
+│   │       ├── users/
+│   │       │   └── route.ts                  # GET listagem de operadores ativos para filtros e atribuição
+│   │       └── contacts/
+│   │           ├── route.ts                  # GET listagem paginada/CSV e POST cadastro idempotente de contato
+│   │           └── [id]/
+│   │               ├── route.ts              # GET Ficha 360°, PATCH edição otimista e DELETE exclusão lógica
+│   │               ├── interacoes/route.ts   # GET/POST registro append-only imutável de interações
+│   │               └── respostas/route.ts    # GET/POST respostas e disparo atômico de opt-out (descadastro)
+│   ├── components/
+│   │   ├── CRMApp.tsx                        # Componente raiz que conecta o hook de estado à árvore ViewNode
+│   │   └── ViewNode.tsx                      # Renderizador React do modelo de apresentação (sem mutação direta do DOM)
+│   ├── hooks/
+│   │   └── useCRM.ts                         # Estado React, inicialização e ciclo de vida dos efeitos
+│   ├── lib/
+│   │   ├── prisma.ts                         # Instância singleton do Prisma Client com adapter `pg`
+│   │   ├── auth-service.ts                   # Regras de autenticação, sessões, Argon2id e recuperação de senha
+│   │   ├── contact-service.ts                # Regras de Contatos, Ficha 360°, exclusão lógica, interações e opt-out
+│   │   ├── audit-service.ts                  # Registro padronizado e sanitizado em `eventos_auditoria`
+│   │   ├── idempotency-service.ts            # Wrapper `withIdempotency` (chave UUID, hash SHA-256 e replay seguro)
+│   │   ├── rate-limit.ts                     # Contenção de taxa por IP/e-mail na recuperação de senha
+│   │   ├── crm-controller.js                 # Controlador de telas, navegação, eventos e integração com APIs
+│   │   ├── view-state.js                     # Árvore de estado de apresentação e ponte com APIs do navegador
+│   │   └── domain.cjs                        # Regras de domínio compartilhadas, validações e utilitários
+│   ├── types/
+│   │   └── crm.ts                            # Tipagens TypeScript compartilhadas do CRM
+│   └── generated/prisma/                     # Cliente TypeScript gerado pelo Prisma (não versionado)
+├── tests/
+│   ├── *.integration.test.{cjs,ts}           # Testes reais no PostgreSQL (migrations, triggers, auth, idempotência)
+│   ├── *.test.{cjs,ts,js}                    # Testes de domínio, rotas, serviços, formulários, estado e UI
+│   ├── browser-parity.mjs                    # Fluxos ponta a ponta executados em Chrome isolado
+│   ├── visual-parity.mjs                     # Comparação visual automatizada contra o protótipo original
+│   ├── helpers/                              # Utilitários compartilhados (`postgres-test.cjs` com `testWithDatabase`)
+│   └── fixtures/                             # Massas e dados auxiliares para os testes
+├── docs/
+│   ├── documentacao-tecnica.md               # Referência técnica completa (Prisma 7, PBIs, APIs, deploy e testes)
+│   ├── integracao-sprint-1-postgresql.md     # Matriz de status da Sprint 1 e contratos ativos de API
+│   ├── guia-auditoria-code-review.md         # Governança de branches/PRs e critérios de revisão técnica
+│   ├── homologacao-qa.md                     # Caderno mestre de testes funcionais (QA)
+│   ├── homologacao-ux.md                     # Caderno mestre de usabilidade, UI e responsividade (UX)
+│   └── issues-sprint-2-qa-ux.md              # Recorte e templates de issues de QA/UX da Sprint 2
+├── .env.example                              # Modelo de variáveis de ambiente (`DATABASE_URL`, `DIRECT_URL`, bootstrap)
+├── compose.test.yaml                         # Definição do PostgreSQL 16 descartável usado por `npm test`
+├── next.config.mjs                           # Configuração do Next.js (incluindo `serverExternalPackages: ["argon2"]`)
+├── package.json                              # Dependências, engines e scripts npm
+├── prisma.config.ts                          # Configuração da CLI do Prisma 7 com prioridade para `DIRECT_URL`
+├── source-manifest.json                      # Hashes SHA-256 de procedência dos arquivos do protótipo
+├── tsconfig.json                             # Configuração do compilador TypeScript
+└── vercel.json                               # Comando de build para deploy na Vercel (`db:generate && build`)
 ```
 
 ---

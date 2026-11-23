@@ -1,5 +1,7 @@
 # Luz da Esperança · CRM
 
+**Aplicação online:** [https://crm-serejodev.vercel.app](https://crm-serejodev.vercel.app)
+
 ## Sobre o Projeto
 
 O **CRM Luz da Esperança** é uma aplicação web de gestão de relacionamento, captação de recursos e acompanhamento de doadores desenvolvida para a **Luz da Esperança — Centro Espírita e Obras Sociais** *(Parnaíba, PI)*.
@@ -10,7 +12,7 @@ O sistema centraliza toda a jornada de relacionamento com potenciais doadores e 
 Construído em **Next.js 16 (App Router)**, **React 19**, **Prisma ORM 7** e **PostgreSQL 13+**.
 
 ### Para quem foi feito
-O sistema foi projetado para os **voluntários da Luz da Esperança e coordenadores** envolvidos na captação de recursos, no cuidado com doadores e na gestão das obras sociais da instituição — oferecendo um espaço único, simples e confiável para organizar o relacionamento diário, acompanhar contribuições e apoiar decisões administrativas com transparência.
+O sistema foi projetado para os **voluntários e coordenadores da Luz da Esperança** envolvidos na captação de recursos, no cuidado com doadores e na gestão das obras sociais da instituição, centralizando o relacionamento diário, o acompanhamento de contribuições e o apoio às decisões administrativas.
 
 ### Estado atual da entrega
 - **Integrado ao PostgreSQL (Sprint 1 completa):** autenticação, sessões revogáveis, recuperação e redefinição de senha (`PB-001` a `PB-003`), operadores e módulo completo de **Contatos / Ficha 360°** (`PB-007` a `PB-011`: listagem, filtros, CSV, cadastro/edição em 2 etapas, exclusão lógica, interações imutáveis e respostas/opt-out).
@@ -21,9 +23,6 @@ O sistema foi projetado para os **voluntários da Luz da Esperança e coordenado
 ---
 
 ## Telas e Abas do Sistema
-
-Espaço reservado para as capturas oficiais de cada aba do CRM (salve as imagens em `docs/images/` e descomente a tag `<img>` correspondente).
-
 <table>
   <tr>
     <td width="50%" valign="top">
@@ -53,7 +52,7 @@ Espaço reservado para as capturas oficiais de cada aba do CRM (salve as imagens
     <td width="50%" valign="top">
       <strong>Contatos e Ficha 360°</strong><br />
       <sub>Base central PF/PJ com filtros, CSV, cadastro em 2 etapas, interações imutáveis, respostas e opt-out.</sub><br /><br />
-      <img src="https://imgur.com/B6PZI8L.png" alt="Aba Contatos e Ficha 360°" width="100%" />
+      <img src="https://imgur.com/KvOZYNt.png" alt="Aba Contatos e Ficha 360°" width="100%" />
     </td>
     <td width="50%" valign="top">
       <strong>Doadores</strong><br />
@@ -149,13 +148,15 @@ Abra `http://127.0.0.1:3000` (ou use `npm.cmd run dev -- --port 3001` para rodar
 
 ## Produção e Deploy
 
+A aplicação está publicada na Vercel em **[https://crm-serejodev.vercel.app](https://crm-serejodev.vercel.app)**.
+
 ```powershell
 npm.cmd run db:deploy
 npm.cmd run build
 npm.cmd start
 ```
 
-Para deploy na **Vercel + Neon** ([vercel.json](./vercel.json), `DATABASE_URL` pooled e `DIRECT_URL` direct), consulte [docs/documentacao-tecnica.md](./docs/documentacao-tecnica.md#deploy-em-produção-vercel--neon).
+Para detalhes da configuração na **Vercel + Neon** ([vercel.json](./vercel.json), `DATABASE_URL` pooled e `DIRECT_URL` direct), consulte [docs/documentacao-tecnica.md](./docs/documentacao-tecnica.md#deploy-em-produção-vercel--neon).
 
 ---
 
@@ -256,12 +257,12 @@ crm/
 │   └── issues-sprint-2-qa-ux.md              # Recorte e templates de issues de QA/UX da Sprint 2
 ├── .env.example                              # Modelo de variáveis de ambiente (`DATABASE_URL`, `DIRECT_URL`, bootstrap)
 ├── compose.test.yaml                         # Definição do PostgreSQL 16 descartável usado por `npm test`
-├── next.config.mjs                           # Configuração do Next.js (incluindo `serverExternalPackages: ["argon2"]`)
+├── next.config.mjs                           # Configuração do Next.js
 ├── package.json                              # Dependências, engines e scripts npm
 ├── prisma.config.ts                          # Configuração da CLI do Prisma 7 com prioridade para `DIRECT_URL`
 ├── source-manifest.json                      # Hashes SHA-256 de procedência dos arquivos do protótipo
 ├── tsconfig.json                             # Configuração do compilador TypeScript
-└── vercel.json                               # Comando de build para deploy na Vercel (`db:generate && build`)
+└── vercel.json                               # Configuração de build para deploy na Vercel
 ```
 
 ---

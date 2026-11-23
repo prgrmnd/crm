@@ -23,14 +23,14 @@
 
 ## 1. Instruções de Uso, Severidade e Critérios de Aprovação
 
-1. Este arquivo centraliza toda a trilha transversal de **UX Aplicada (`UX-01`)** do planejamento oficial (Sprints 2 a 6, incluindo a homologação integrada `HO-01`), operando em ciclo contínuo com `QA-01`: enquanto o time de desenvolvimento constrói o módulo da sprint corrente, `UX-01` valida a usabilidade da sprint anterior e antecipa templates visuais/impressão da sprint seguinte.
+1. Este arquivo centraliza toda a trilha transversal de **UX Aplicada (`UX-01`)** do planejamento oficial (Sprints 2 a 6 e homologação integrada `HO-01`), operando em ciclo contínuo com `QA-01`: enquanto o time de desenvolvimento constrói o módulo da sprint corrente, `UX-01` valida a usabilidade da sprint anterior e antecipa templates visuais/impressão da sprint seguinte.
 2. **Como registrar execuções no GitHub:**
    - Em arquivos `.md` do repositório, os checkboxes são exibidos como somente leitura. A cada ciclo, `UX-01` deve marcar `[x]` editando este arquivo via **Pull Request** (ou copiar o checklist do ciclo para uma **Issue de Homologação UX** no GitHub para marcação interativa e consolidar o resultado final aqui no fechamento do ciclo).
-   - Relatórios de sessões moderadas e evidências visuais devem ser armazenados em `docs/ux/` (criar a pasta ao anexar o primeiro relatório, ex.: `docs/ux/relatorio-usabilidade-s1.md`).
+   - Relatórios de sessões moderadas e evidências visuais devem ser armazenados em `docs/ux/` (ex.: `docs/ux/relatorio-usabilidade-s1.md`).
 3. **Regra de Registro por Caso de Verificação:**
    - **`PASSOU`:** critério de usabilidade, layout, responsividade ou entrega de artefato atendido sem atritos impeditivos.
    - **`FALHOU`:** encontrado atrito crítico/alto, quebra visual ou divergência de fluxo. Preencha **Observação / Issue**, classifique a severidade e abra uma Issue vinculada antes de aprovar o ciclo.
-   - **`BLOQUEADO`:** impossibilidade de execução por dependência técnica ou funcionalidade ainda não entregue na branch atual. Registre o motivo e o rastreio da pendência.
+   - **`BLOQUEADO`:** impossibilidade de execução por dependência técnica ou funcionalidade ainda não entregue. Registre o motivo e o rastreio da pendência.
 4. **Classificação de Severidade de Atritos de UX:**
    - **Crítico (Bloqueante):** impede o usuário de concluir a tarefa, oculta ação essencial, causa perda de dados ou gera interpretação financeira incorreta (ex.: comprovante de adesão parecendo recibo de pagamento).
    - **Alto (Impeditivo do Ciclo):** exige ajuda do moderador para concluir a tarefa, quebra layout em mobile/tablet (`375px`/`768px`) ou inviabiliza navegação por teclado.
@@ -58,9 +58,9 @@
 Antes de executar cada ciclo de UX, prepare o ambiente conforme o [README](../README.md) e valide os itens abaixo:
 
 1. **Ambiente funcional e massa de dados:**
-   - Aplicação em execução com PostgreSQL ativo e migrations aplicadas (ou ambiente de homologação equivalente).
+   - Ambiente publicado na Vercel: [https://crm-serejodev.vercel.app](https://crm-serejodev.vercel.app) (ou instância local com PostgreSQL ativo e migrations aplicadas).
    - Contas prontas para os perfis **Administrador** e **Operador de Captação** (para validar visibilidade condicional de menus e ações por perfil).
-   - Massa de dados realista preparada em conjunto com `QA-01` (`QA-01.2` / `QA-02.2`), incluindo contatos PF/PJ, estados vazios (*empty states*) e registros com nomes/textos longos.
+   - Massa de dados realista preparada em conjunto com `QA-01` (`QA-01.2` / `QA-02.2`), com contatos PF/PJ, estados vazios (*empty states*) e registros com nomes/textos longos.
 2. **Matriz mínima de resoluções e mídia:**
    - **Mobile:** `375 × 812 px` (validação de tabelas, formulários, Ficha 360° e Kanban).
    - **Tablet:** `768 × 1024 px` (validação de grade, painéis laterais e filtros).
@@ -88,7 +88,7 @@ Antes de executar cada ciclo de UX, prepare o ambiente conforme o [README](../RE
   2. Pedir que simulem o fluxo de **Esqueci minha senha** e interpretem o feedback exibido na tela.
   3. Observar a compreensão da mensagem exibida após erro de senha e no bloqueio temporário por tentativas excessivas.
 * **Resultado Esperado:** O usuário realiza login e entende a mensagem neutra de recuperação sem confusão; a diferenciação visual de menus entre **Operador de Captação** e **Administrador** é clara e sem opções mortas/confusas.
-* **Nota técnica (versão atual `develop`):** O envio de e-mail em `PB-002` é simulado em desenvolvimento (`[DEV E-MAIL]` no console) e a tela/rota de redefinição de senha (`PB-003`) ainda não foi entregue na `develop` — avaliar `PB-003` assim que integrado.
+* **Nota técnica:** O envio de e-mail em `PB-002` é simulado em desenvolvimento (`[DEV E-MAIL]` no console). A rota `GET/POST /api/auth/redefinir-senha` e a tela `#redefinir=<token>` (`PB-003`) já estão disponíveis para validação.
 * **Resultado da Validação:**
   - [ ] **PASSOU** *(Relatório consolidado em `docs/ux/`)*
   - [ ] **FALHOU**
@@ -104,7 +104,7 @@ Antes de executar cada ciclo de UX, prepare o ambiente conforme o [README](../RE
   3. Pedir que selecionem a origem **Site** ou **Instagram** na Etapa 2 e observar se a trava automática para **Inbound** está visualmente evidente e explicada.
   4. Avaliar a clareza do feedback quando há tentativa de duplicidade de e-mail ou CPF/CNPJ.
 * **Resultado Esperado:** Fluxo em 2 etapas concluído sem intervenção do moderador; campos obrigatórios, bloqueio *Inbound* e mensagens de validação são compreendidos na primeira leitura.
-* **Nota técnica (versão atual `develop`):** O cadastro e a edição em 2 etapas persistem diretamente no PostgreSQL via `POST /api/contacts` e `PATCH /api/contacts/[id]`, validando duplicidade (`HTTP 409`) e regra Inbound no servidor.
+* **Nota técnica:** O cadastro e a edição em 2 etapas persistem no PostgreSQL via `POST /api/contacts` e `PATCH /api/contacts/[id]`, validando duplicidade (`HTTP 409`) e regra Inbound no servidor.
 * **Resultado da Validação:**
   - [ ] **PASSOU** *(Relatório consolidado em `docs/ux/`)*
   - [ ] **FALHOU**
@@ -120,7 +120,7 @@ Antes de executar cada ciclo de UX, prepare o ambiente conforme o [README](../RE
   3. Solicitar o registro manual de **Pedido de Descadastro (Opt-out)** e verificar se o indicador de inelegibilidade para e-mails fica imediatamente visível na ficha.
   4. (Com perfil Administrador) Avaliar a clareza da orientação exibida quando a exclusão é bloqueada por vínculo financeiro (orientando cancelar o plano em vez de excluir).
 * **Resultado Esperado:** Usuário encontra a ficha, registra interação e entende o estado de opt-out sem hesitação; mensagens de imutabilidade e bloqueio de exclusão financeira são autoexplicativas.
-* **Nota técnica (versão atual `develop`):** A Ficha 360° (`GET /api/contacts/[id]`), as interações (`POST /api/contacts/[id]/interacoes`), respostas/opt-out (`POST /api/contacts/[id]/respostas`) e exclusão lógica (`DELETE /api/contacts/[id]`) operam diretamente no PostgreSQL (a checagem real de vínculo financeiro entra com `PB-060`/`PB-061`).
+* **Nota técnica:** A Ficha 360° (`GET /api/contacts/[id]`), as interações (`POST /api/contacts/[id]/interacoes`), respostas/opt-out (`POST /api/contacts/[id]/respostas`) e exclusão lógica (`DELETE /api/contacts/[id]`) operam no PostgreSQL (a checagem real de vínculo financeiro entra com `PB-060`/`PB-061`).
 * **Resultado da Validação:**
   - [ ] **PASSOU** *(Relatório consolidado em `docs/ux/`)*
   - [ ] **FALHOU**
@@ -137,7 +137,7 @@ Antes de executar cada ciclo de UX, prepare o ambiente conforme o [README](../RE
   2. Validar **estados vazios (*empty states*)**: listagem sem contatos, busca/filtro sem resultados e ficha sem interações registradas.
   3. Testar nomes extensos, e-mails longos e resumos próximos a 3.000 caracteres verificando quebras de linha, rolagem horizontal indesejada e sobreposição de botões.
 * **Resultado Esperado:** Nenhuma quebra de layout, texto cortado ou ação inacessível em mobile/tablet; todos os estados vazios apresentam orientação clara para o próximo passo do operador.
-* **Nota técnica (versão atual `develop`):** Quando `DATABASE_URL` está configurada, a listagem de contatos exibe o *empty state* real quando a tabela `contatos` está vazia (apenas a aba **Doadores** mantém fallback de demonstração até `PB-060`/`PB-061`).
+* **Nota técnica:** Com `DATABASE_URL` configurada, a listagem de contatos exibe o *empty state* real quando a tabela `contatos` está vazia (a aba **Doadores** mantém fallback de demonstração até `PB-060`/`PB-061`).
 * **Resultado da Validação:**
   - [ ] **PASSOU**
   - [ ] **FALHOU**
@@ -261,7 +261,7 @@ Validar coerência visual das telas administrativas (gestão de usuários, alert
 - **Observação / Issue:** `—`
 
 #### `UX-05.03` — Homologação Integrada e Regressão Visual Geral (`HO-01` / Todos os Módulos)
-Executar junto com `LT-01`, `QA-01` e `DEVs` a regressão visual e funcional dos 12 módulos (incluindo verificação da suíte visual `npm run test:visual` quando aplicável), confirmar encerramento de defeitos impeditivos até `17/12/2026` e assinar o parecer de UX para o congelamento e entrega formal em `18/12/2026`.
+Executar junto com `LT-01`, `QA-01` e `DEVs` a regressão visual e funcional dos 12 módulos (com execução da suíte visual `npm run test:visual` quando aplicável), confirmar encerramento de defeitos impeditivos até `17/12/2026` e assinar o parecer de UX para o congelamento e entrega formal em `18/12/2026`.
 - [ ] **PASSOU**
 - [ ] **FALHOU**
 - [ ] **BLOQUEADO**

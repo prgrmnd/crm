@@ -28,7 +28,7 @@
 3. **Regra de Registro por Caso de Teste:**
    - **`PASSOU`:** comportamento validado integralmente conforme o resultado esperado.
    - **`FALHOU`:** divergência funcional ou de regra de negócio. Preencha **Observação / Issue** e abra uma Issue vinculada antes de aprovar a entrega.
-   - **`BLOQUEADO`:** impossibilidade de execução por dependência técnica ou funcionalidade ainda não entregue na branch atual. Preencha **Observação / Issue** com o motivo e o rastreio da pendência.
+   - **`BLOQUEADO`:** impossibilidade de execução por dependência técnica ou funcionalidade ainda não entregue. Preencha **Observação / Issue** com o motivo e o rastreio da pendência.
 4. **Critério de Fechamento do Ciclo:**
    - Um ciclo só pode ser marcado como `APROVADO` quando não houver nenhum caso em `FALHOU` de severidade crítica ou bloqueante em aberto e todos os casos `BLOQUEADO` estiverem justificados e vinculados às respectivas Issues/PBIs.
 
@@ -53,9 +53,8 @@
 Antes de iniciar a homologação funcional, certifique-se de que o ambiente local ou de homologação esteja configurado conforme o [README](../README.md) e a [Documentação Técnica](./documentacao-tecnica.md):
 
 1. **Banco de dados e aplicação ativos:**
-   - PostgreSQL 13+ acessível via `DATABASE_URL` no arquivo `.env`.
-   - Migrations aplicadas (`npm run db:migrate` ou `npm run db:deploy`) e Prisma Client gerado (`npm run db:generate`).
-   - Aplicação em execução (`npm run dev` ou `npm run build && npm start`).
+   - Ambiente publicado na Vercel: [https://crm-serejodev.vercel.app](https://crm-serejodev.vercel.app).
+   - Para execução local: PostgreSQL 13+ acessível via `DATABASE_URL` no arquivo `.env`, migrations aplicadas (`npm run db:migrate` ou `npm run db:deploy`), Prisma Client gerado (`npm run db:generate`) e aplicação ativa (`npm run dev` ou `npm run build && npm start`).
 2. **Contas de teste necessárias (tabela `usuarios`):**
    - **Administrador ativo** (criado via `npm run db:bootstrap-admin` quando a tabela `usuarios` estiver vazia).
    - **Operador de Captação ativo** (`perfil = 'operador_captacao'`, `ativo = true`).
@@ -127,7 +126,7 @@ Antes de iniciar a homologação funcional, certifique-se de que o ambiente loca
   4. Repita o envio para um **e-mail de conta inativa**.
   5. Dispare múltiplas requisições seguidas para testar o limite de taxa (*rate limit*) da rota `POST /api/auth/recuperar-senha`.
 * **Resultado Esperado:** A mensagem exibida na tela e o status HTTP (`200`) são **idênticos e neutros** para e-mail inexistente, ativo ou inativo (não revela se a conta existe). O token de recuperação é gerado apenas para a conta ativa. Requisições excessivas são barradas com `HTTP 429`.
-* **Nota técnica (versão atual `develop`):** O envio de e-mail ainda é **simulado em desenvolvimento**. Valide a geração do token no log `[DEV E-MAIL]` do console do servidor e o hash SHA-256 gravado na tabela `tokens_recuperacao` (a validação de entrega SMTP real ficará condicionada à integração do provedor de e-mail).
+* **Nota técnica:** O envio de e-mail é simulado em desenvolvimento (`[DEV E-MAIL]` no console do servidor). Valide a geração do token no log e o hash SHA-256 gravado na tabela `tokens_recuperacao` (a entrega SMTP real depende da integração do provedor de e-mail).
 * **Resultado do Teste:**
   - [ ] **PASSOU**
   - [ ] **FALHOU**
@@ -144,7 +143,7 @@ Antes de iniciar a homologação funcional, certifique-se de que o ambiente loca
   4. Tente abrir o **mesmo link** de recuperação novamente.
   5. Volte ao **Navegador A** (que estava logado antes) e tente navegar no sistema.
 * **Resultado Esperado:** A senha é alterada; a reutilização do link é recusada; a sessão antiga no Navegador A é invalidada imediatamente. *(Teste complementar: validar link expirado após 15 minutos).*
-* **Nota técnica (versão atual `develop`):** A rota `GET/POST /api/auth/redefinir-senha` e a tela `#redefinir=<token>` (`PB-003`) já estão integradas na `develop` (incluindo bloqueio do formulário até validação do token, limpeza do token na URL e erro opaco para conta inativa). Utilize o link impresso em `[DEV E-MAIL]` no console do servidor em desenvolvimento.
+* **Nota técnica:** A rota `GET/POST /api/auth/redefinir-senha` e a tela `#redefinir=<token>` (`PB-003`) validam o token antes de liberar o formulário, limpam o token da URL e retornam erro opaco para conta inativa. Em ambiente local, utilize o link impresso em `[DEV E-MAIL]` no console do servidor.
 * **Resultado do Teste:**
   - [ ] **PASSOU**
   - [ ] **FALHOU**
@@ -161,7 +160,7 @@ Antes de iniciar a homologação funcional, certifique-se de que o ambiente loca
   2. Selecione 2 contatos na **Página 1**, avance para a **Página 2**, selecione mais 1 contato e volte para a **Página 1**.
   3. Clique em **Exportar CSV** e abra o arquivo gerado (teste com seleção ativa e sem seleção).
 * **Resultado Esperado:** A seleção feita na Página 1 permanece preservada ao navegar entre páginas; o arquivo CSV usa UTF-8 com BOM e separador `;`, exportando somente os selecionados quando há seleção ou o resultado filtrado completo quando não há seleção.
-* **Nota técnica (versão atual `develop`):** A listagem e exportação CSV de **Todos** e **Potenciais** consultam diretamente o PostgreSQL (exibindo *empty state* real quando a tabela `contatos` está vazia). Apenas a aba **Doadores** mantém fallback de demonstração até a entrega de planos/pagamentos (`PB-060`/`PB-061`).
+* **Nota técnica:** A listagem e exportação CSV de **Todos** e **Potenciais** consultam diretamente o PostgreSQL (exibindo *empty state* quando a tabela `contatos` está vazia). A aba **Doadores** mantém fallback de demonstração até a entrega de planos/pagamentos (`PB-060`/`PB-061`).
 * **Resultado do Teste:**
   - [ ] **PASSOU**
   - [ ] **FALHOU**
@@ -176,7 +175,7 @@ Antes de iniciar a homologação funcional, certifique-se de que o ambiente loca
   2. Preencha e-mail ou telefone, avance para a Etapa 2 e selecione Origem **Site** ou **Instagram**.
   3. Conclua o cadastro. Em seguida, tente cadastrar um **novo contato usando o mesmo e-mail ou mesmo CPF/CNPJ**.
 * **Resultado Esperado:** O sistema exige ao menos e-mail ou telefone; para *Site* e *Instagram*, a classificação é travada como **Inbound**; a tentativa de cadastrar e-mail ou documento duplicado é bloqueada.
-* **Nota técnica (versão atual `develop`):** O cadastro e a edição em duas etapas persistem diretamente na tabela `contatos` via `POST /api/contacts` e `PATCH /api/contacts/[id]`, com controle otimista (`versao`), regra Inbound, bloqueio de duplicidade (`HTTP 409`) e auditoria em `eventos_auditoria`.
+* **Nota técnica:** Cadastro e edição em duas etapas persistem na tabela `contatos` via `POST /api/contacts` e `PATCH /api/contacts/[id]`, com controle otimista (`versao`), regra Inbound, bloqueio de duplicidade (`HTTP 409`) e auditoria em `eventos_auditoria`.
 * **Resultado do Teste:**
   - [ ] **PASSOU**
   - [ ] **FALHOU**
@@ -191,7 +190,7 @@ Antes de iniciar a homologação funcional, certifique-se de que o ambiente loca
   2. Logado como **Administrador**, exclua um contato **sem histórico financeiro**.
   3. Logado como **Administrador**, tente excluir um contato que possua **vínculo/histórico financeiro** (na interface e via requisição direta a `DELETE /api/contacts/[id]`).
 * **Resultado Esperado:** Operador não possui permissão de exclusão; Administrador consegue excluir contato sem histórico financeiro (com registro em `eventos_auditoria`), mas a interface e o servidor (`HTTP 409`) recusam a exclusão quando há histórico financeiro.
-* **Nota técnica (versão atual `develop`):** A Ficha 360° (`GET /api/contacts/[id]`) e a exclusão lógica (`DELETE /api/contacts/[id]`) operam diretamente no PostgreSQL com trava `403` para Operador, idempotência e auditoria. A checagem de vínculo financeiro (`hasFinancialHistoryInDatabase`) está estruturada para receber a consulta às tabelas de planos/pagamentos na entrega de `PB-060`/`PB-061`.
+* **Nota técnica:** A Ficha 360° (`GET /api/contacts/[id]`) e a exclusão lógica (`DELETE /api/contacts/[id]`) operam no PostgreSQL com trava `403` para Operador, idempotência e auditoria. A checagem de vínculo financeiro (`hasFinancialHistoryInDatabase`) está preparada para as tabelas de planos/pagamentos (`PB-060`/`PB-061`).
 * **Resultado do Teste:**
   - [ ] **PASSOU**
   - [ ] **FALHOU**
@@ -206,7 +205,7 @@ Antes de iniciar a homologação funcional, certifique-se de que o ambiente loca
   2. Tente informar uma **data/hora futura** (ex.: amanhã) ou deixar o **resumo em branco** (ou acima de 3.000 caracteres).
   3. Salve uma interação válida e procure opções para **editar ou apagar** essa anotação na tela.
 * **Resultado Esperado:** O sistema bloqueia data futura, resumo vazio e texto acima do limite; após salva, a interação aparece na linha do tempo com autor e data/hora, **sem opção de edição ou exclusão**.
-* **Nota técnica (versão atual `develop`):** O formulário rápido persiste diretamente na tabela `interacoes` via `POST /api/contacts/[id]/interacoes` (com idempotência e auditoria), protegido por triggers de imutabilidade física no PostgreSQL.
+* **Nota técnica:** O formulário rápido persiste em `interacoes` via `POST /api/contacts/[id]/interacoes` (com idempotência e auditoria), protegido por triggers de imutabilidade física no PostgreSQL.
 * **Resultado do Teste:**
   - [ ] **PASSOU**
   - [ ] **FALHOU**
@@ -220,7 +219,7 @@ Antes de iniciar a homologação funcional, certifique-se de que o ambiente loca
   1. Na Ficha 360° de um contato, registre manualmente uma resposta classificando-a como **Pedido de Descadastro (Opt-out)**.
   2. Verifique a linha do tempo e o status de elegibilidade de comunicação do contato.
 * **Resultado Esperado:** O descadastro fica registrado na linha do tempo com autor/data e marca o contato como inelegível/bloqueado para futuros envios de e-mail.
-* **Nota técnica (versão atual `develop`):** Os fluxos de resposta e opt-out na Ficha 360° persistem diretamente em `respostas_contato` via `POST /api/contacts/[id]/respostas`, acionando a trigger transacional `respostas_registrar_descadastro` que atualiza `preferencias_comunicacao` (`descadastrado`) e registra `comunicacao.descadastro` em `eventos_auditoria`.
+* **Nota técnica:** Respostas e opt-out na Ficha 360° persistem em `respostas_contato` via `POST /api/contacts/[id]/respostas`, acionando a trigger transacional `respostas_registrar_descadastro` que atualiza `preferencias_comunicacao` (`descadastrado`) e registra `comunicacao.descadastro` em `eventos_auditoria`.
 * **Resultado do Teste:**
   - [ ] **PASSOU**
   - [ ] **FALHOU**
@@ -318,7 +317,7 @@ Remover contato da lista e confirmar que o cadastro permanece intacto no CRM.
 - **Observação / Issue:** `—`
 
 #### `CT-06.02` — Inclusão Segmentada em Lote (`PB-024`)
-Validar *Selecionar todos* incluindo páginas não carregadas e bloqueio de duplicidade de vínculo.
+Validar *Selecionar todos* em todas as páginas (mesmo não carregadas) e bloqueio de duplicidade de vínculo.
 - [ ] **PASSOU**
 - [ ] **FALHOU**
 - [ ] **BLOQUEADO**

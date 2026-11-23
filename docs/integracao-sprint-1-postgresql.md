@@ -1,6 +1,7 @@
 # Plano e Status da Integração Sprint 1 → PostgreSQL (Saída do `localStorage`)
 
-> **Status Atual:** ✅ **Integração da Sprint 1 completa na branch atual** (incluindo issue `#13` / `PB-003`, integrada via `PR #55`).  
+> **Status Atual:** Integração da Sprint 1 concluída (`PB-001` a `PB-003` e `PB-007` a `PB-011`).  
+> **Ambiente em produção:** [https://crm-serejodev.vercel.app](https://crm-serejodev.vercel.app)  
 > **Documentos relacionados:** [README](../README.md) · [Documentação Técnica](./documentacao-tecnica.md) · [Guia de Auditoria e Code Review](./guia-auditoria-code-review.md) · [Caderno de Homologação QA](./homologacao-qa.md) · [Caderno de Homologação UX](./homologacao-ux.md)
 
 ---
@@ -9,14 +10,14 @@
 
 | Issue / PBI | Banco (`prisma/migrations`) | API (`src/app/api`) | Interface (`src/lib/crm-controller.js`) | Status |
 | :--- | :--- | :--- | :--- | :--- |
-| **`#11` (`PB-001`)** Login/Sessão/Logout | ✅ `usuarios`, `sessoes`, `tentativas_login`, `eventos_auditoria` | ✅ `POST /api/auth/login`, `GET/PUT /api/auth/session`, `POST /api/auth/logout` (com auditoria de logout em `eventos_auditoria`) | ✅ Integrado via `fetch` (sem gravar auditoria de logout no `localStorage`) | ✅ **Integrado** |
-| **`#12` (`PB-002`)** Recuperação de Senha | ✅ `tokens_recuperacao`, `eventos_auditoria` | ✅ `POST /api/auth/recuperar-senha` (com auditoria sanitizada em `eventos_auditoria`) | ✅ Botão **"Esqueci minha senha"** restaurado em `renderLogin()` + tratamento explícito de `HTTP 429`/`400` em `recover()` | ✅ **Integrado** *(SMTP real na Sprint 3; rate limit distribuído em backlog de infra)* |
+| **`#11` (`PB-001`)** Login/Sessão/Logout | ✅ `usuarios`, `sessoes`, `tentativas_login`, `eventos_auditoria` | ✅ `POST /api/auth/login`, `GET/PUT /api/auth/session`, `POST /api/auth/logout` (com auditoria de logout em `eventos_auditoria`) | ✅ Integrado via `fetch` | ✅ **Integrado** |
+| **`#12` (`PB-002`)** Recuperação de Senha | ✅ `tokens_recuperacao`, `eventos_auditoria` | ✅ `POST /api/auth/recuperar-senha` (com auditoria sanitizada em `eventos_auditoria`) | ✅ Fluxo **"Esqueci minha senha"** em `renderLogin()` com tratamento de `HTTP 429`/`400` em `recover()` | ✅ **Integrado** *(SMTP real na Sprint 3; rate limit distribuído em backlog de infra)* |
 | **`#13` (`PB-003`)** Redefinição de Senha | ✅ `tokens_recuperacao`, `usuarios`, `sessoes`, `eventos_auditoria` | ✅ `GET/POST /api/auth/redefinir-senha` (validação prévia de token, troca Argon2id + revogação de sessões + auditoria em transação única e erro opaco para conta inativa) | ✅ Tela `#redefinir=<token>` com bloqueio do formulário até validação do token e limpeza do token da URL | ✅ **Integrado** |
-| **`#14` (`PB-007`)** Listagem, Filtros, Seleção e CSV | ✅ `contatos`, `origens`, `etapas_captacao`, `usuarios`, `preferencias_comunicacao` | ✅ `GET /api/contacts` + `GET /api/users?ativo=true`; corrigidos `situacao: "descadastrado"`, `vigenteDesde <= now`, `stage` (`0–3`) ↔ `ordem` (`1–4`), `ownerName`, validação de UUID em `ids`/`owner`, nomes oficiais das etapas no CSV e remoção de fallback silencioso | ✅ Sem mesclagem em `state.contacts` (`localStorage`); operadores carregados via `/api/users`; seleção em lote e exportação CSV via API | ✅ **Integrado** *(aba Doadores mantém fallback até `PB-060`/`PB-061`)* |
+| **`#14` (`PB-007`)** Listagem, Filtros, Seleção e CSV | ✅ `contatos`, `origens`, `etapas_captacao`, `usuarios`, `preferencias_comunicacao` | ✅ `GET /api/contacts` + `GET /api/users?ativo=true` (paginação, filtros, validação de UUID em `ids`/`owner`, preferência vigente de opt-out e exportação CSV com etapas oficiais) | ✅ Operadores carregados via `/api/users`; seleção em lote e exportação CSV via API | ✅ **Integrado** *(aba Doadores mantém fallback até `PB-060`/`PB-061`)* |
 | **`#15` (`PB-008`)** Cadastro/Edição em 2 Etapas | ✅ `contatos` + trigger `contatos_preparar_gravacao` + `contatos_inicializar_preferencia` | ✅ `POST /api/contacts` (idempotente + auditoria) e `PATCH /api/contacts/[id]` (concorrência otimista via `versao`, preservação obrigatória da etapa + auditoria `antes`/`depois`) | ✅ Formulário guiado em 2 etapas conectado a `POST`/`PATCH` via `fetch`, com `Idempotency-Key` e operadores do banco | ✅ **Integrado** |
-| **`#16` (`PB-009`)** Ficha 360° e Exclusão Lógica | ✅ `contatos.excluido_em`, `eventos_auditoria`, `requisicoes_idempotentes` | ✅ `GET /api/contacts/[id]` (Ficha 360° consolidada) e `DELETE /api/contacts/[id]` refatorado (sem `body.state`, exige Admin `403`, idempotência, soft-delete em `contatos`, auditoria transacional e hook `hasFinancialHistoryInDatabase`) | ✅ Ficha 360° carrega de `GET /api/contacts/[id]` e exclusão chama `DELETE /api/contacts/[id]` com `Idempotency-Key` | ✅ **Integrado** *(trava financeira real liga quando `PB-060`/`PB-061` existirem)* |
-| **`#17` (`PB-010`)** Interações Imutáveis | ✅ `interacoes` + triggers de imutabilidade | ✅ `GET/POST /api/contacts/[id]/interacoes` (autenticado, idempotente, valida canal incluindo `"Reunião presencial" → "reuniao"`, bloqueia data futura e resumo vazio/>3.000 chars, sem `PUT`/`PATCH`/`DELETE`) | ✅ Formulário rápido conectado a `POST /api/contacts/[id]/interacoes` e removido uso direto de `document.getElementById` | ✅ **Integrado** |
-| **`#18` (`PB-011`)** Respostas e Opt-out | ✅ `respostas_contato`, `preferencias_comunicacao` + trigger `respostas_registrar_descadastro` | ✅ `GET/POST /api/contacts/[id]/respostas` (e `POST /api/contacts/[id]` legado agora autenticado + idempotente), delegando integralmente `descadastro` à trigger `PB-058` e garantindo conteúdo padrão quando motivo é omitido | ✅ Ambos os fluxos (`responseForm` e `optOutForm`) conectados a `POST /api/contacts/[id]/respostas` via `fetch` | ✅ **Integrado** |
+| **`#16` (`PB-009`)** Ficha 360° e Exclusão Lógica | ✅ `contatos.excluido_em`, `eventos_auditoria`, `requisicoes_idempotentes` | ✅ `GET /api/contacts/[id]` (Ficha 360° consolidada) e `DELETE /api/contacts/[id]` (exige Admin `403`, idempotência, soft-delete em `contatos`, auditoria transacional e hook `hasFinancialHistoryInDatabase`) | ✅ Ficha 360° carrega de `GET /api/contacts/[id]` e exclusão chama `DELETE /api/contacts/[id]` com `Idempotency-Key` | ✅ **Integrado** *(trava financeira real liga quando `PB-060`/`PB-061` existirem)* |
+| **`#17` (`PB-010`)** Interações Imutáveis | ✅ `interacoes` + triggers de imutabilidade | ✅ `GET/POST /api/contacts/[id]/interacoes` (autenticado, idempotente, validação de canal, data não futura e resumo até 3.000 chars, sem `PUT`/`PATCH`/`DELETE`) | ✅ Formulário rápido conectado a `POST /api/contacts/[id]/interacoes` | ✅ **Integrado** |
+| **`#18` (`PB-011`)** Respostas e Opt-out | ✅ `respostas_contato`, `preferencias_comunicacao` + trigger `respostas_registrar_descadastro` | ✅ `GET/POST /api/contacts/[id]/respostas` (autenticado e idempotente, delegando `descadastro` à trigger `PB-058`) | ✅ Fluxos `responseForm` e `optOutForm` conectados a `POST /api/contacts/[id]/respostas` via `fetch` | ✅ **Integrado** |
 
 ---
 
@@ -60,6 +61,6 @@ npm test
 
 | Caso | Status para homologação ponta a ponta no PostgreSQL |
 | :--- | :--- |
-| `CT-01.01` a `CT-01.04` | ✅ Destravados (incluindo botão *"Esqueci minha senha"*, `429` na UI e auditoria de logout/recuperação) |
-| `CT-01.05` (`#13`) | ✅ Destravado (`GET/POST /api/auth/redefinir-senha` e tela `#redefinir=<token>` integradas na branch atual) |
+| `CT-01.01` a `CT-01.04` | ✅ Destravados (login, sessão, recuperação de senha, `429` na UI e auditoria) |
+| `CT-01.05` (`#13`) | ✅ Destravado (`GET/POST /api/auth/redefinir-senha` e tela `#redefinir=<token>`) |
 | `CT-03.01` a `CT-03.05` | ✅ Destravados 100% no PostgreSQL (exceto aba *Doadores* / vínculo financeiro real até `PB-060`/`PB-061`) |

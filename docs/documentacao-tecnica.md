@@ -45,8 +45,9 @@ npm.cmd run db:studio     # inspeciona tabelas no Prisma Studio
 
 ### Deploy em produção (Vercel + Neon)
 
+- **URL em produção:** [https://crm-serejodev.vercel.app](https://crm-serejodev.vercel.app)
 - **Build na Vercel ([vercel.json](../vercel.json)):** executa `npm run db:generate && npm run build`.
-- **Next.js ([next.config.mjs](../next.config.mjs)):** mantém `serverExternalPackages: ["argon2"]` (para empacotamento correto do módulo nativo de hash), `poweredByHeader: false`, `reactStrictMode: false` e `devIndicators: false`.
+- **Next.js ([next.config.mjs](../next.config.mjs)):** define `serverExternalPackages: ["argon2"]`, `poweredByHeader: false`, `reactStrictMode: false` e `devIndicators: false`.
 - **Neon PostgreSQL:** configure `DATABASE_URL` com a string **pooled** (runtime da aplicação) e `DIRECT_URL` (ou `DATABASE_URL_UNPOOLED`) com a string **direct/sem `-pooler`** para executar `npm run db:deploy`.
 
 ---
@@ -68,7 +69,7 @@ O modelo `EventoAuditoria` (`eventos_auditoria`) registra a trilha de auditoria 
 - **Imutabilidade física:** os triggers `eventos_auditoria_sem_update_delete` (`BEFORE UPDATE OR DELETE FOR EACH ROW`) e `eventos_auditoria_sem_truncate` (`BEFORE TRUNCATE FOR EACH STATEMENT`) executam `eventos_auditoria_bloquear_mutacao()`, bloqueando qualquer tentativa de `UPDATE`, `DELETE` ou `TRUNCATE` com `ERRCODE = '55000'`.
 - **Sanitização de credenciais e segredos:** as `CHECK` constraints `eventos_auditoria_antes_sanitizado` e `eventos_auditoria_depois_sanitizado` inspecionam recursivamente os payloads JSONB (`antes` e `depois`) por meio da função `eventos_auditoria_contem_dado_sensivel`, rejeitando chaves associadas a `senha`, `password`, `credential`, `credencial`, `token`, `secret`, `segredo`, `salt`, `hash`, `authorization` ou `cookie`.
 - **Integridade do ator:** valida que `ator_tipo` seja `'usuario'` (exigindo `ator_id` preenchido) ou `'sistema'` (exigindo `ator_id` nulo).
-- **Pendência conhecida:** as FKs de `eventos_auditoria` para usuários e contatos permanecem pendentes (não foram adicionadas na `PB-058` para não alterar contratos e fixtures fora do escopo).
+- **Pendência conhecida:** as FKs de `eventos_auditoria` para usuários e contatos ainda não foram adicionadas.
 
 ### Usuários, credenciais e sessões (`PB-052`)
 
@@ -111,7 +112,7 @@ Os modelos `Interacao`, `RespostaContato` e `PreferenciaComunicacao` representam
 
 - **Interações imutáveis:** aceitam telefone, WhatsApp, reunião ou e-mail, data não futura e resumo obrigatório de até 3.000 caracteres. Triggers bloqueiam `UPDATE`, `DELETE` e `TRUNCATE` de interações e respostas, inclusive pelo Prisma. As FKs preservam contato e autoria com `RESTRICT`.
 - **Preferências temporais sem sobreposição:** cobrem o canal `email`, com situações `permitido` e `descadastrado`. Os períodos são semiabertos `[vigente_desde, vigente_ate)`, com fim nulo para a versão atual. Um índice único parcial limita uma versão sem fim por contato/canal; uma exclusion constraint GiST impede qualquer sobreposição, inclusive entre transações concorrentes. Uma versão só pode ser alterada para encerrar a vigência; exclusão e reescrita do histórico são bloqueadas.
-- **Preferência inicial:** contatos existentes recebem uma preferência inicial `permitido` desde `criado_em` durante a migration; novos contatos recebem a mesma preferência por trigger (reproduzindo `optOut=false` do protótipo; a política institucional de consentimento ainda precisa de ratificação).
+- **Preferência inicial:** contatos existentes recebem uma preferência inicial `permitido` desde `criado_em` durante a migration; novos contatos recebem a mesma preferência por trigger (equivalente ao padrão `optOut=false`).
 - **Fluxo atômico de descadastro:** para registrar descadastro, inserir uma `RespostaContato` com `classificacao = 'descadastro'`. O trigger (`respostas_registrar_descadastro`) serializa os pedidos do contato, encerra a preferência anterior, cria a versão descadastrada vinculada à resposta e registra `comunicacao.descadastro` em `eventos_auditoria`, tudo na transação da inserção. Falha em qualquer etapa desfaz todos esses efeitos. **Não duplicar esses efeitos na aplicação.** Uma nova resposta de descadastro é um novo registro histórico; repetir a mesma requisição ainda exige idempotência no consumidor.
 - **Pendências de evolução:** `envio_destinatario_id` é UUID opcional sem FK até a tabela `envio_destinatarios` existir. Não há tela ou fluxo de reopt-in nesta entrega.
 - **Regra para consumidores de envios e réguas:** consulte a preferência vigente no instante do envio exigindo `situacao = 'permitido'` via `vigente_desde <= instante AND (vigente_ate IS NULL OR instante < vigente_ate)`. A estrutura de banco não envia mensagens nem cancela agendamentos por si só.
@@ -140,7 +141,7 @@ Executado via [scripts/bootstrap-admin.mjs](../scripts/bootstrap-admin.mjs):
 - **`POST /api/auth/recuperar-senha` (`PB-002`):** valida o formato do e-mail antes de consumir cota de rate limit por IP e e-mail normalizado (`HTTP 429` em excesso de tentativas), invalida atomicamente tokens pendentes anteriores de contas ativas e persiste apenas o hash SHA-256. Retorna sempre `HTTP 200` com resposta neutra idêntica para prevenir enumeração de contas; em `NODE_ENV=development`, simula o envio no console com o prefixo `[DEV E-MAIL]`.
 - **`GET` e `POST /api/auth/redefinir-senha` (`PB-003`):**
   - A tela de nova senha é aberta pelo link `#redefinir=<token>`, bloqueia o formulário até validar o token com `GET /api/auth/redefinir-senha?token=...` e limpa o token da URL na interface; links expirados, consumidos ou cancelados são recusados (com erro opaco/uniforme também para conta inativa).
-  - `POST /api/auth/redefinir-senha` exige token válido e senha com **8 a 1024 caracteres**, incluindo letra maiúscula, minúscula, número e caractere especial (armazenada como Argon2id em formato PHC).
+  - `POST /api/auth/redefinir-senha` exige token válido e senha com **8 a 1024 caracteres**, com letra maiúscula, minúscula, número e caractere especial (armazenada como Argon2id em formato PHC).
   - Consumo do token, troca da senha, incremento de versão, revogação de todas as sessões ativas e registro de auditoria ocorrem em **uma única transação**, com bloqueio da linha do token para impedir uso concorrente.
 
 ### Middleware de requisições idempotentes (`PB-071`)
@@ -196,7 +197,7 @@ npx.cmd tsc --noEmit
 
 ### Suíte automatizada com PostgreSQL (`npm test`)
 
-[scripts/test-with-postgres.cjs](../scripts/test-with-postgres.cjs) usa Docker Compose ([compose.test.yaml](../compose.test.yaml)) para iniciar um **PostgreSQL 16** temporário em `127.0.0.1:55432`, gera o Prisma Client, aplica todas as migrations (`prisma migrate deploy`), executa toda a suíte (incluindo testes de integração) e remove container e volume ao terminar.
+[scripts/test-with-postgres.cjs](../scripts/test-with-postgres.cjs) usa Docker Compose ([compose.test.yaml](../compose.test.yaml)) para iniciar um **PostgreSQL 16** temporário em `127.0.0.1:55432`, gera o Prisma Client, aplica todas as migrations (`prisma migrate deploy`), executa toda a suíte de testes e remove container e volume ao terminar.
 
 - Requer **Docker Desktop ativo**.
 - O banco `crm_test` é descartável e **não altera** a `DATABASE_URL` de desenvolvimento.

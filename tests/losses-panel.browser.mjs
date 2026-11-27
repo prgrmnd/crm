@@ -1,9 +1,65 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { test } from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import D from "./fixtures/seed.cjs";
 
-test("painel mostra a etapa de captação registrada na saída em desktop e mobile", async () => {
+const defaultUrl = "http://127.0.0.1:3108";
+const root = fileURLToPath(new URL("../", import.meta.url));
+
+async function startServer(t) {
+  const server = spawn(
+    process.execPath,
+    [
+      "node_modules/next/dist/bin/next",
+      "start",
+      "--hostname",
+      "127.0.0.1",
+      "--port",
+      "3108",
+    ],
+    { cwd: root, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] },
+  );
+  let serverLog = "";
+  let serverError;
+  server.stdout.on("data", (chunk) => {
+    serverLog += chunk;
+  });
+  server.stderr.on("data", (chunk) => {
+    serverLog += chunk;
+  });
+  server.on("error", (error) => {
+    serverError = error;
+  });
+
+  const closed = new Promise((resolve) => server.once("close", resolve));
+  t.after(async () => {
+    server.kill();
+    await closed;
+  });
+
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    if (serverError || server.exitCode !== null || server.signalCode !== null)
+      break;
+    // A resposta HTTP confirma que o Next terminou de iniciar a aplicação.
+    if (serverLog.includes("Ready in")) {
+      const response = await fetch(defaultUrl, {
+        signal: AbortSignal.timeout(1000),
+      }).catch(() => null);
+      await response?.body?.cancel();
+      if (response?.ok) return defaultUrl;
+    }
+    await delay(100);
+  }
+  throw new Error(
+    `Next indisponível em ${defaultUrl}.\n${serverError ?? serverLog}`,
+  );
+}
+
+test("painel mostra a etapa de captação registrada na saída em desktop e mobile", async (t) => {
   const state = D.seed();
   const contact = state.contacts[8];
   const account = {
@@ -35,11 +91,18 @@ test("painel mostra a etapa de captação registrada na saída em desktop e mobi
   delete missingStageContact.cadenceExit.stage;
   invalidStageContact.cadenceExit.stage = "length";
 
+  const browserUrl = process.env.CRM_BROWSER_URL || (await startServer(t));
   const browser = await chromium.launch({
-    executablePath: process.env.CHROME_PATH,
+    executablePath:
+      process.env.CHROME_PATH ||
+      (process.platform === "win32"
+        ? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+        : undefined),
   });
   try {
-    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const page = await browser.newPage({
+      viewport: { width: 1440, height: 900 },
+    });
     await page.addInitScript((data) => {
       localStorage.setItem("luz-crm-v1", JSON.stringify(data));
     }, state);
@@ -49,7 +112,7 @@ test("painel mostra a etapa de captação registrada na saída em desktop e mobi
     await page.route("**/api/users?*", (route) =>
       route.fulfill({ json: { users: [] } }),
     );
-    await page.goto(process.env.CRM_BROWSER_URL || "http://127.0.0.1:3108");
+    await page.goto(browserUrl);
     await page.locator('[data-action="nav"][data-id="losses"]').click();
 
     const board = page.locator(".losses-kanban");
@@ -88,7 +151,10 @@ test("painel mostra a etapa de captação registrada na saída em desktop e mobi
     await card.waitFor({ state: "visible" });
     await card.focus();
     await card.press("Enter");
-    await page.getByRole("dialog").getByRole("heading", { name: contact.name }).waitFor();
+    await page
+      .getByRole("dialog")
+      .getByRole("heading", { name: contact.name })
+      .waitFor();
   } finally {
     await browser.close();
   }

@@ -664,10 +664,16 @@ export function createCRMController(model) {
         (name, i) =>
           `<section class="column is-selected" aria-label="Perdas em ${esc(name)}"><div class="column-heading"><span class="stage-number">${i + 1}</span><h3>${esc(name)}</h3><span class="stage-count">${cs.filter((c) => D.lossStage(c) === i).length}</span></div><div class="column-cards" tabindex="0" role="region" aria-label="Perdas em ${esc(name)}">${cs
             .filter((c) => D.lossStage(c) === i)
-            .map(
-              (c) =>
-                `<button type="button" class="card compact-card loss-card" data-action="profile" data-id="${c.id}" aria-label="Ver detalhes de ${esc(c.name)}"><span class="compact-contact">${avatar(c)}<span class="compact-card-info"><span class="contact-name">${esc(c.name)}</span><small>${esc(c.origin)} · ${esc(c.funnel)}</small></span><span class="card-move" aria-hidden="true">${icon("arrow")}</span></span></button>`,
-            )
+            .map((c) => {
+              const stageAtExit = c.cadenceExit.stage;
+              const lastCaptureStage =
+                Number.isInteger(stageAtExit) &&
+                stageAtExit >= 0 &&
+                stageAtExit < D.STAGES.length
+                  ? D.STAGES[stageAtExit]
+                  : "Não informada";
+              return `<button type="button" class="card compact-card loss-card" data-action="profile" data-id="${c.id}" aria-label="Ver detalhes de ${esc(c.name)}. Última etapa de captação: ${esc(lastCaptureStage)}"><span class="compact-contact">${avatar(c)}<span class="compact-card-info"><span class="contact-name">${esc(c.name)}</span><small>${esc(c.origin)} · ${esc(c.funnel)}</small></span><span class="card-move" aria-hidden="true">${icon("arrow")}</span></span><span class="loss-capture-stage"><span>Última etapa de captação</span><strong>${esc(lastCaptureStage)}</strong></span></button>`;
+            })
             .join("") ||
           '<div class="empty compact-empty">Nenhuma perda nesta etapa.</div>'
           }</div></section>`,

@@ -215,6 +215,7 @@ model Contato {
   interacoes              Interacao[]
   respostasContato        RespostaContato[]
   preferenciasComunicacao PreferenciaComunicacao[]
+  planosAdesao            PlanoAdesao[]
 
   @@index([responsavelId, dataCadastro], map: "contatos_responsavel_data_cadastro_idx")
   @@index([origemId, classificacao], map: "contatos_origem_classificacao_idx")
@@ -277,4 +278,37 @@ model PreferenciaComunicacao {
   @@index([respostaId], map: "preferencias_resposta_idx")
   @@index([autorId], map: "preferencias_autor_idx")
   @@map("preferencias_comunicacao")
+}
+
+model PlanoAdesao {
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm      DateTime         @default(now()) @map("criado_em") @db.Timestamptz(6)
+  atualizadoEm  DateTime         @default(now()) @map("atualizado_em") @db.Timestamptz(6)
+  contatoId     String           @map("contato_id") @db.Uuid
+  // Modalidades e vencimento (1–28 para recorrentes) definidos em PB-019/PB-020.
+  modalidade    String           @db.VarChar(10)
+  // Único valor monetário confirmado na especificação da adesão.
+  valorPactuado Decimal          @map("valor_pactuado") @db.Decimal(14, 2)
+  diaVencimento Int?             @map("dia_vencimento") @db.SmallInt
+  dataAdesao    DateTime         @map("data_adesao") @db.Timestamptz(6)
+  contato       Contato          @relation(fields: [contatoId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "planos_adesao_contato_id_fkey")
+  suspensoes    SuspensaoPlano[]
+
+  // O trigger planos_adesao_atualizado_em mantém atualizado_em no banco.
+  @@index([contatoId], map: "planos_adesao_contato_idx")
+  @@map("planos_adesao")
+}
+
+model SuspensaoPlano {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm      DateTime    @default(now()) @map("criado_em") @db.Timestamptz(6)
+  planoAdesaoId String      @map("plano_adesao_id") @db.Uuid
+  inicioEm      DateTime    @map("inicio_em") @db.Timestamptz(6)
+  fimEm         DateTime?   @map("fim_em") @db.Timestamptz(6)
+  planoAdesao   PlanoAdesao @relation(fields: [planoAdesaoId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "suspensoes_plano_plano_adesao_id_fkey")
+
+  // A constraint EXCLUDE USING GIST suspensoes_plano_sem_sobreposicao fica apenas
+  // na migration SQL: o Prisma Schema não a representa integralmente.
+  @@index([planoAdesaoId, inicioEm], map: "suspensoes_plano_adesao_inicio_idx")
+  @@map("suspensoes_plano")
 }

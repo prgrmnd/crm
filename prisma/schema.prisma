@@ -114,6 +114,7 @@ model Usuario {
   interacoes              Interacao[]
   respostasContato        RespostaContato[]
   preferenciasComunicacao PreferenciaComunicacao[]
+  eventosDominio          EventoDominio[]
 
   @@index([criadoPorId], map: "usuarios_criado_por_idx")
   @@map("usuarios")
@@ -215,6 +216,7 @@ model Contato {
   interacoes              Interacao[]
   respostasContato        RespostaContato[]
   preferenciasComunicacao PreferenciaComunicacao[]
+  eventosDominio          EventoDominio[]
 
   @@index([responsavelId, dataCadastro], map: "contatos_responsavel_data_cadastro_idx")
   @@index([origemId, classificacao], map: "contatos_origem_classificacao_idx")
@@ -277,4 +279,53 @@ model PreferenciaComunicacao {
   @@index([respostaId], map: "preferencias_resposta_idx")
   @@index([autorId], map: "preferencias_autor_idx")
   @@map("preferencias_comunicacao")
+}
+
+// PB-068: fatos de negócio append-only. Cada inserção gera, por trigger, a mensagem
+// correspondente em caixa_saida na mesma transação (Outbox transacional).
+model EventoDominio {
+  id                String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm          DateTime    @default(now()) @map("criado_em") @db.Timestamptz(6)
+  // Padrão <contexto>.<fato_no_passado>, ex.: captacao.etapa_alterada.
+  tipo              String      @db.VarChar(100)
+  versaoEsquema     Int         @default(1) @map("versao_esquema") @db.SmallInt
+  agregadoTipo      String      @map("agregado_tipo") @db.VarChar(80)
+  agregadoId        String      @map("agregado_id") @db.Uuid
+  contatoId         String?     @map("contato_id") @db.Uuid
+  atorTipo          String      @map("ator_tipo") @db.VarChar(10)
+  atorId            String?     @map("ator_id") @db.Uuid
+  payload           Json        @default("{}") @db.JsonB
+  // UNIQUE: violação 23505 significa que o mesmo fato já foi registrado (clique concorrente).
+  chaveDeduplicacao String?     @unique(map: "eventos_dominio_chave_deduplicacao_unica") @map("chave_deduplicacao") @db.VarChar(200)
+  correlacaoId      String      @map("correlacao_id") @db.Uuid
+  contato           Contato?    @relation(fields: [contatoId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  ator              Usuario?    @relation(fields: [atorId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  mensagem          CaixaSaida?
+
+  @@index([agregadoTipo, agregadoId, criadoEm], map: "eventos_dominio_agregado_idx")
+  @@index([contatoId, criadoEm(sort: Desc)], map: "eventos_dominio_contato_idx")
+  @@index([tipo, criadoEm], map: "eventos_dominio_tipo_idx")
+  @@index([correlacaoId], map: "eventos_dominio_correlacao_idx")
+  @@index([atorId], map: "eventos_dominio_ator_idx")
+  @@map("eventos_dominio")
+}
+
+// Preenchida somente pelo trigger de eventos_dominio; a aplicação nunca insere aqui.
+// Os índices parciais da fila (pendente/processando) ficam só na migration.
+model CaixaSaida {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  criadoEm     DateTime      @default(now()) @map("criado_em") @db.Timestamptz(6)
+  atualizadoEm DateTime      @default(now()) @map("atualizado_em") @db.Timestamptz(6)
+  eventoId     String        @unique(map: "caixa_saida_evento_unico") @map("evento_id") @db.Uuid
+  topico       String        @db.VarChar(100)
+  // pendente | processando | publicado | falhou
+  situacao     String        @default("pendente") @db.VarChar(15)
+  tentativas   Int           @default(0)
+  disponivelEm DateTime      @default(now()) @map("disponivel_em") @db.Timestamptz(6)
+  bloqueadoAte DateTime?     @map("bloqueado_ate") @db.Timestamptz(6)
+  publicadoEm  DateTime?     @map("publicado_em") @db.Timestamptz(6)
+  ultimoErro   String?       @map("ultimo_erro") @db.VarChar(2000)
+  evento       EventoDominio @relation(fields: [eventoId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("caixa_saida")
 }

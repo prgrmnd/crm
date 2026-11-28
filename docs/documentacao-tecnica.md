@@ -117,6 +117,14 @@ Os modelos `Interacao`, `RespostaContato` e `PreferenciaComunicacao` representam
 - **Pendências de evolução:** `envio_destinatario_id` é UUID opcional sem FK até a tabela `envio_destinatarios` existir. Não há tela ou fluxo de reopt-in nesta entrega.
 - **Regra para consumidores de envios e réguas:** consulte a preferência vigente no instante do envio exigindo `situacao = 'permitido'` via `vigente_desde <= instante AND (vigente_ate IS NULL OR instante < vigente_ate)`. A estrutura de banco não envia mensagens nem cancela agendamentos por si só.
 
+### Planos de adesão e suspensões temporais (`PB-060`)
+
+Os modelos `PlanoAdesao` (`planos_adesao`) e `SuspensaoPlano` (`suspensoes_plano`) estruturam as adesões financeiras dos doadores e seus períodos de suspensão sem gerar lançamentos antecipados no caixa. A migration ([20261127100000_create_planos_adesao_suspensoes](../prisma/migrations/20261127100000_create_planos_adesao_suspensoes/migration.sql)) depende de `contatos` e da extensão `btree_gist`:
+
+- **Planos de adesão (`planos_adesao`):** vinculados a `contatos(id)` com `ON DELETE RESTRICT ON UPDATE RESTRICT`, armazenam `modalidade` (`'Pontual'` ou `'Recorrente'`), `valor_pactuado` em `NUMERIC(14,2)` estritamente positivo (`> 0`), `data_adesao` e `dia_vencimento` validado por `CHECK` (`NULL` para `'Pontual'`; inteiro entre `1` e `28` para `'Recorrente'`). O trigger `planos_adesao_atualizado_em` mantém `atualizado_em` em atualizações.
+- **Suspensões sem sobreposição (`suspensoes_plano`):** vinculadas a `planos_adesao(id)` com `ON DELETE RESTRICT ON UPDATE RESTRICT`, modelam períodos semiabertos `[inicio_em, fim_em)` (`fim_em IS NULL OR fim_em > inicio_em`). A constraint `EXCLUDE USING gist` (`suspensoes_plano_sem_sobreposicao`) impede intervalos sobrepostos para o mesmo plano — inclusive entre transações concorrentes (`SQLSTATE 23P01`) — permitindo períodos adjacentes. Por limitação do Prisma Schema, a constraint GiST reside exclusivamente na migration SQL.
+- **Cobertura de integração:** validada em [tests/planos-suspensoes.integration.test.cjs](../tests/planos-suspensoes.integration.test.cjs) (modalidades, vencimento, concorrência GiST e períodos adjacentes).
+
 ### Outbox transacional e eventos de domínio (`PB-068`)
 
 Os modelos `EventoDominio` (`eventos_dominio`) e `CaixaSaida` (`caixa_saida`) implementam o padrão Outbox: o fato de negócio e a mensagem a publicar são gravados no **mesmo `COMMIT`** da regra que os originou.
@@ -177,7 +185,7 @@ O modelo `RequisicaoIdempotente` (`requisicoes_idempotentes`) e o wrapper `withI
 prisma/schema.prisma        modelo relacional do Prisma ORM 7
 prisma/migrations/          migrations SQL versionadas (constraints, triggers e seeds)
 src/generated/prisma/       cliente TypeScript gerado pelo Prisma
-src/app/                    entrada App Router, rotas de API, documento e CSS global original
+src/app/                    entrada App Router, rotas de API, documento, CSS global e CSS isolado de módulos (ex.: losses.css da PB-014 T01)
 src/components/             componentes funcionais CRMApp e ViewNode
 src/hooks/useCRM.ts         estado React, inicialização e ciclo de vida dos efeitos
 src/lib/crm-controller.js   fluxos, modelos de apresentação e eventos migrados
@@ -222,7 +230,9 @@ npm.cmd test
 npm.cmd run build
 npm.cmd run test:browser
 npm.cmd run test:visual
+node --test tests/losses-panel.browser.mjs
 ```
 
 - Os testes de navegador usam o Chrome em `C:\Program Files\Google\Chrome\Application\chrome.exe` (personalizável via `$env:CHROME_PATH`), sobem servidores e navegadores isolados e não utilizam seu perfil pessoal.
 - `test:browser` é independente do protótipo; `test:visual` compara com o protótipo na pasta superior ou em `$env:PROTOTYPE_ROOT`. Resultados e capturas vão para `test-results/` (portas `3108–3110`).
+- `tests/losses-panel.browser.mjs` (`PB-014 T01`) é autossuficiente: inicia e encerra automaticamente `next start` em `127.0.0.1:3108` quando `CRM_BROWSER_URL` não está definida, validando em desktop e mobile a exibição da última etapa de captação no Funil de Perdas.

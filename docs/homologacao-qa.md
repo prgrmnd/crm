@@ -83,10 +83,10 @@ Antes de iniciar a homologação funcional, certifique-se de que o ambiente loca
   4. Aguarde **1 minuto** e tente entrar novamente com a senha correta.
 * **Resultado Esperado:** Na 5ª/6ª tentativa o sistema bloqueia o acesso informando o bloqueio temporário (mesmo digitando a senha correta). Após 1 minuto, o login volta a funcionar normalmente.
 * **Resultado do Teste:**
-  - [ ] **PASSOU**
+  - [x] **PASSOU**
   - [ ] **FALHOU**
   - [ ] **BLOQUEADO**
-  - **Observação / Issue:** `—`
+  - **Observação / Issue:** #61 — Execução funcional em 28/11/2026, Google Chrome. Bloqueio após cinco falhas, senha correta recusada durante a janela e entrada após a espera. Primeira medição inconclusiva preservada no relatório. [Relatório e evidências](./qa-61/relatorio.md).
 
 ---
 
@@ -97,10 +97,10 @@ Antes de iniciar a homologação funcional, certifique-se de que o ambiente loca
   3. Após os 30 minutos, clique em qualquer menu (ex.: *Contatos*) ou tente salvar um registro.
 * **Resultado Esperado:** O servidor recusa a requisição por sessão expirada e redireciona o usuário de volta para a tela de Login.
 * **Resultado do Teste:**
-  - [ ] **PASSOU**
+  - [x] **PASSOU**
   - [ ] **FALHOU**
   - [ ] **BLOQUEADO**
-  - **Observação / Issue:** `—`
+  - **Observação / Issue:** #61 — Execução funcional em 28/11/2026, Google Chrome. Logout validado em duas execuções. Inatividade repetida com conexão estável: conta logada às 13h39min59s e tela de login às 14h12min06s. Primeira execução com queda de rede preservada. Instante exato da expiração não observado. [Relatório e evidências](./qa-61/relatorio.md).
 
 ---
 
@@ -111,10 +111,10 @@ Antes de iniciar a homologação funcional, certifique-se de que o ambiente loca
   3. Tente fazer login com um usuário marcado como **Inativo** no banco.
 * **Resultado Esperado:** Operador acessa apenas áreas permitidas (direcionado ao funil de captação, sem menus administrativos/relatórios exclusivos de Admin); Administrador é direcionado à visão geral; conta inativa tem acesso recusado pelo servidor.
 * **Resultado do Teste:**
-  - [ ] **PASSOU**
+  - [x] **PASSOU**
   - [ ] **FALHOU**
   - [ ] **BLOQUEADO**
-  - **Observação / Issue:** `—`
+  - **Observação / Issue:** #61 — Execução funcional em 28/11/2026, Google Chrome. Conta inativa recusada; Operador no Funil de Captação sem menus administrativos; Administrador na Visão geral com Relatórios, Usuários e acessos e Histórico de auditoria. [Relatório e evidências](./qa-61/relatorio.md).
 
 ---
 

@@ -117,6 +117,17 @@ Os modelos `Interacao`, `RespostaContato` e `PreferenciaComunicacao` representam
 - **Pendências de evolução:** `envio_destinatario_id` é UUID opcional sem FK até a tabela `envio_destinatarios` existir. Não há tela ou fluxo de reopt-in nesta entrega.
 - **Regra para consumidores de envios e réguas:** consulte a preferência vigente no instante do envio exigindo `situacao = 'permitido'` via `vigente_desde <= instante AND (vigente_ate IS NULL OR instante < vigente_ate)`. A estrutura de banco não envia mensagens nem cancela agendamentos por si só.
 
+### Outbox transacional e eventos de domínio (`PB-068`)
+
+Os modelos `EventoDominio` (`eventos_dominio`) e `CaixaSaida` (`caixa_saida`) implementam o padrão Outbox: o fato de negócio e a mensagem a publicar são gravados no **mesmo `COMMIT`** da regra que os originou.
+
+- **Gravação atômica por trigger:** cada `INSERT` em `eventos_dominio` cria, pelo trigger `eventos_dominio_enfileirar`, exatamente uma mensagem `pendente` em `caixa_saida` (UNIQUE em `evento_id`). Se a transação da regra de negócio for desfeita, evento e mensagem desaparecem juntos. A aplicação **não insere** em `caixa_saida`: inserções diretas são rejeitadas (`ERRCODE = '55000'`).
+- **Uso pelo consumidor (ex.: `PB-013`):** dentro da mesma transação da alteração (`prisma.$transaction`), gravar a mudança de negócio e depois um `EventoDominio` com `tipo` no padrão `<contexto>.<fato>` (ex.: `captacao.etapa_alterada`), `agregadoTipo`/`agregadoId`, `contatoId` quando houver, ator (`usuario` com `atorId` ou `sistema` sem ele), `payload` (objeto JSON) e `correlacaoId`.
+- **Evento único em cliques concorrentes:** `chave_deduplicacao` é opcional e única (ex.: `captacao.etapa_alterada:<contatoId>:<versao>`). Uma segunda gravação do mesmo fato aguarda a primeira transação e recebe `23505` (`eventos_dominio_chave_deduplicacao_unica`) se ela confirmar; o consumidor deve tratar esse erro como "já registrado", sem gerar novo evento.
+- **Imutabilidade e sanitização:** eventos são append-only (`UPDATE`, `DELETE` e `TRUNCATE` bloqueados). O `payload` reutiliza `eventos_auditoria_contem_dado_sensivel` e rejeita chaves de senha, token, hash, segredo e afins.
+- **Ciclo da mensagem:** `pendente` → `processando` (com `bloqueado_ate`) → `publicado` (exige `publicado_em`), ou retorno a `pendente` com novo `disponivel_em` (backoff) e `ultimo_erro`, ou `falhou`. `tentativas` nunca diminui; `evento_id`, `topico` e `criado_em` são imutáveis; mensagem publicada não pode ser alterada. Somente mensagens `publicado` podem ser removidas (limpeza), e `TRUNCATE` é bloqueado.
+- **Coleta pelo publicador:** `SELECT ... FROM caixa_saida WHERE situacao = 'pendente' AND disponivel_em <= now() ORDER BY disponivel_em FOR UPDATE SKIP LOCKED`, apoiada pelo índice parcial `caixa_saida_pendentes_idx`. O publicador em si (worker/cron) não faz parte desta entrega.
+
 ---
 
 ## 3. Provisionamento de Contas, Autenticação e Contratos de API

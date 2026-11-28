@@ -1,4 +1,5 @@
 import "./globals.css";
+import "./losses.css";
 
 export const metadata = {
   title: "Luz da Esperança · CRM",

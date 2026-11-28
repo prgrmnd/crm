@@ -13,7 +13,7 @@ Validar pela interface o login, o bloqueio temporário, o logout, a expiração 
 - Organização local das evidências dos casos CT-01.01, CT-01.02 e CT-01.03, com arquivos identificados por caso, execução, conteúdo, data e horário.
 - Registro das primeiras tentativas, repetições, resultados e condições que limitam a conclusão.
 - Registro de sugestões de experiência observadas durante a execução.
-- Preparação deste relatório conforme os cinco títulos do pop.md. Atualização do repositório e publicação do PR aguardam revisão do usuário.
+- Relatório organizado conforme os cinco títulos do pop.md. Contribuição registrada no PR #132.
 
 ## Testes executados
 
@@ -125,29 +125,39 @@ CT-01.02 completo — PASSOU no cenário funcional, reunindo logout aprovado e r
 
 ### Evidências principais
 
-Os caminhos abaixo são relativos a este relatório local. Antes de publicar no GitHub, preparar caminhos ou anexos acessíveis ao revisor.
+As 22 capturas foram anexadas em comentário na [issue #61](https://github.com/prgrmnd/crm/issues/61). Os links abaixo apontam para os anexos hospedados pelo GitHub.
 
-- [CT-01.03_admin_03_visao-geral-perfil_2026-11-28_120648.png](evidencias/CT-01.03/CT-01.03_admin_03_visao-geral-perfil_2026-11-28_120648.png)
-- [CT-01.03_admin_04_menus-administrativos_2026-11-28_120702.png](evidencias/CT-01.03/CT-01.03_admin_04_menus-administrativos_2026-11-28_120702.png)
-- [CT-01.03_admin_05_antes-sair_2026-11-28_120728.png](evidencias/CT-01.03/CT-01.03_admin_05_antes-sair_2026-11-28_120728.png)
-- [CT-01.03_admin_06_login-apos-sair_2026-11-28_120735.png](evidencias/CT-01.03/CT-01.03_admin_06_login-apos-sair_2026-11-28_120735.png)
-- [CT-01.03_conta-inativa_01_antes_2026-11-28_113716.png](evidencias/CT-01.03/CT-01.03_conta-inativa_01_antes_2026-11-28_113716.png)
-- [CT-01.03_conta-inativa_02_recusa_2026-11-28_113822.png](evidencias/CT-01.03/CT-01.03_conta-inativa_02_recusa_2026-11-28_113822.png)
-- [CT-01.03_operador_04_funil-rolagem-inicial_2026-11-28_114450.png](evidencias/CT-01.03/CT-01.03_operador_04_funil-rolagem-inicial_2026-11-28_114450.png)
-- [CT-01.03_operador_05_perfil-operador-topo_2026-11-28_114504.png](evidencias/CT-01.03/CT-01.03_operador_05_perfil-operador-topo_2026-11-28_114504.png)
-- [CT-01.03_operador_06_menu-operador-final_2026-11-28_114919.png](evidencias/CT-01.03/CT-01.03_operador_06_menu-operador-final_2026-11-28_114919.png)
+#### CT-01.01 — Bloqueio e liberação
 
-- [CT-01.02_inatividade_01_inicio-logado_2026-11-28_122322.png](evidencias/CT-01.02/CT-01.02_inatividade_01_inicio-logado_2026-11-28_122322.png)
-- [CT-01.02_inatividade_02_retomada-login_2026-11-28_125454.png](evidencias/CT-01.02/CT-01.02_inatividade_02_retomada-login_2026-11-28_125454.png)
-- [CT-01.02_inatividade_03_login-final_2026-11-28_125509.png](evidencias/CT-01.02/CT-01.02_inatividade_03_login-final_2026-11-28_125509.png)
-- [CT-01.02_logout_exec1_02_login-apos-sair_2026-11-28_115307.png](evidencias/CT-01.02/CT-01.02_logout_exec1_02_login-apos-sair_2026-11-28_115307.png)
-- [CT-01.02_logout_exec1_04_login-apos-retorno_2026-11-28_115405.png](evidencias/CT-01.02/CT-01.02_logout_exec1_04_login-apos-retorno_2026-11-28_115405.png)
-- [CT-01.02_logout_exec2_03_login-apos-sair_2026-11-28_115713.png](evidencias/CT-01.02/CT-01.02_logout_exec2_03_login-apos-sair_2026-11-28_115713.png)
-- [CT-01.02_logout_exec2_05_login-apos-avancar-atualizar_2026-11-28_115733.png](evidencias/CT-01.02/CT-01.02_logout_exec2_05_login-apos-avancar-atualizar_2026-11-28_115733.png)
+- [CT-01.01_exec2_02_bloqueio-quinta-falha_2026-11-28_121704.png](https://github.com/user-attachments/assets/d7b69362-684c-4a89-9ef0-cb6100e4aa51)
+- [CT-01.01_exec2_03_senha-correta-bloqueada_2026-11-28_121721.png](https://github.com/user-attachments/assets/094fbfa1-1a7b-46cf-8ebd-66d9595c35fc)
+- [CT-01.01_exec2_04_acesso-liberado_2026-11-28_121819.png](https://github.com/user-attachments/assets/49ffa151-a14f-400f-a28d-f555555fe870)
 
-- [CT-01.01_exec2_02_bloqueio-quinta-falha_2026-11-28_121704.png](evidencias/CT-01.01/CT-01.01_exec2_02_bloqueio-quinta-falha_2026-11-28_121704.png)
-- [CT-01.01_exec2_03_senha-correta-bloqueada_2026-11-28_121721.png](evidencias/CT-01.01/CT-01.01_exec2_03_senha-correta-bloqueada_2026-11-28_121721.png)
-- [CT-01.01_exec2_04_acesso-liberado_2026-11-28_121819.png](evidencias/CT-01.01/CT-01.01_exec2_04_acesso-liberado_2026-11-28_121819.png)
+#### CT-01.02 — Logout e inatividade
+
+- [CT-01.02_inatividade_01_inicio-logado_2026-11-28_122322.png](https://github.com/user-attachments/assets/591fa3cf-ea80-4132-9697-50317a22f82d)
+- [CT-01.02_inatividade_02_retomada-login_2026-11-28_125454.png](https://github.com/user-attachments/assets/69d80d13-bdc9-4aeb-973a-c0fad2a297f0)
+- [CT-01.02_inatividade_03_login-final_2026-11-28_125509.png](https://github.com/user-attachments/assets/6273085f-187b-417f-b0a0-2a1aea82b60c)
+- [CT-01.02_inatividade_reteste_01_inicio-logado_2026-11-28_133959.png](https://github.com/user-attachments/assets/15610366-ae19-4c3f-aae6-17bf22134b4a)
+- [CT-01.02_inatividade_reteste_02_retomada-login_2026-11-28_141206.png](https://github.com/user-attachments/assets/999f1a6e-ec20-4019-a5d4-6fc0c43e7696)
+- [CT-01.02_inatividade_reteste_03_confirmacao-login_2026-11-28_141228.png](https://github.com/user-attachments/assets/39d863d2-f8ec-4340-bd4b-f219ce27c7bb)
+- [CT-01.02_logout_exec1_02_login-apos-sair_2026-11-28_115307.png](https://github.com/user-attachments/assets/14f6f314-708f-4153-a5e0-02396a8eb48d)
+- [CT-01.02_logout_exec1_04_login-apos-retorno_2026-11-28_115405.png](https://github.com/user-attachments/assets/818446d5-f793-453b-b16e-f51c42ca19ed)
+- [CT-01.02_logout_exec2_03_login-apos-sair_2026-11-28_115713.png](https://github.com/user-attachments/assets/ded0000f-a76a-48a2-a4e1-42030a5932ba)
+- [CT-01.02_logout_exec2_05_login-apos-avancar-atualizar_2026-11-28_115733.png](https://github.com/user-attachments/assets/c47cbafe-a14b-4481-9fd3-35aab1f51c06)
+
+#### CT-01.03 — Conta inativa e perfis
+
+- [CT-01.03_admin_03_visao-geral-perfil_2026-11-28_120648.png](https://github.com/user-attachments/assets/9c422a3d-bba5-4edf-8d52-f773fd505009)
+- [CT-01.03_admin_04_menus-administrativos_2026-11-28_120702.png](https://github.com/user-attachments/assets/a394367c-3ce1-4e6e-befe-5400d6a135ac)
+- [CT-01.03_admin_05_antes-sair_2026-11-28_120728.png](https://github.com/user-attachments/assets/118cebe9-be0a-4639-a000-19ff71f0d6f4)
+- [CT-01.03_admin_06_login-apos-sair_2026-11-28_120735.png](https://github.com/user-attachments/assets/314f7808-43cf-48cd-9cf3-fdf4c1ff0e6f)
+- [CT-01.03_conta-inativa_01_antes_2026-11-28_113716.png](https://github.com/user-attachments/assets/8ae80590-a464-482a-bd5e-11c5f5ace026)
+- [CT-01.03_conta-inativa_02_recusa_2026-11-28_113822.png](https://github.com/user-attachments/assets/fe254a26-1393-4c4f-83e4-c9108508d58d)
+- [CT-01.03_operador_04_funil-rolagem-inicial_2026-11-28_114450.png](https://github.com/user-attachments/assets/b2d1d4a9-3aa1-443c-9b65-b5322ac9d0d3)
+- [CT-01.03_operador_05_perfil-operador-topo_2026-11-28_114504.png](https://github.com/user-attachments/assets/b0bd0e92-2bf9-4591-95eb-de96c4295558)
+- [CT-01.03_operador_06_menu-operador-final_2026-11-28_114919.png](https://github.com/user-attachments/assets/10ffb835-45db-4075-81a3-bac436eddd5b)
+
 
 ## Observações
 
@@ -163,16 +173,12 @@ Os caminhos abaixo são relativos a este relatório local. Antes de publicar no 
 - Preservar a execução inicial de bloqueio e a ocorrência de uso da conta errada como histórico, sem classificar esses eventos como defeitos do sistema.
 - Algumas imagens de apoio exibem o diálogo de salvar senha do Chrome e informação pessoal da conta do navegador. Priorizar as capturas limpas relacionadas acima para entrega pública.
 - Credenciais do PDF e o próprio PDF de acessos ficam fora do repositório.
-- Nesta consolidação não foi aberto defeito nem publicado resultado no GitHub. A primeira execução inconclusiva e a aprovação do reteste devem permanecer explícitas na revisão final.
-- Seguir pop.md na publicação, com mensagem de commit em inglês e referência neutra #61. Destino develop. Revisão, merge e fechamento sob responsabilidade do Tech Lead.
+- Resultados publicados no PR #132 e evidências anexadas à issue #61. A primeira execução inconclusiva e a aprovação do reteste estão preservadas neste relatório.
+- Contribuição destinada a develop, com referência à issue #61 conforme pop.md. Revisão, merge e fechamento sob responsabilidade do Tech Lead.
 
 ### Fontes e histórico
 
-- pop.md fornecido pelo usuário, fornecido pelo usuário como referência de governança.
+- pop.md fornecido pelo usuário como referência de governança.
 - Caderno de QA — https://github.com/prgrmnd/crm/blob/develop/docs/homologacao-qa.md
 - Histórico detalhado local — Registro detalhado preservado localmente pelo executor.
 - Orientações do Josué e relatos do executor enviados nesta conversa em 28/11/2026.
-
-- [CT-01.02_inatividade_reteste_01_inicio-logado_2026-11-28_133959.png](evidencias/CT-01.02/CT-01.02_inatividade_reteste_01_inicio-logado_2026-11-28_133959.png)
-- [CT-01.02_inatividade_reteste_02_retomada-login_2026-11-28_141206.png](evidencias/CT-01.02/CT-01.02_inatividade_reteste_02_retomada-login_2026-11-28_141206.png)
-- [CT-01.02_inatividade_reteste_03_confirmacao-login_2026-11-28_141228.png](evidencias/CT-01.02/CT-01.02_inatividade_reteste_03_confirmacao-login_2026-11-28_141228.png)
